@@ -210,9 +210,10 @@ async function fetchAndParseIcal(url: string, source: "airbnb" | "booking", vivi
 
 
 
+// src/lib/ical.ts
 import ICAL from "ical.js";
 import { differenceInDays } from "date-fns";
-import { getSupabaseClient } from "./supabase"; // 🔑 usamos función en runtime
+import { getSupabaseClient } from "./supabase"; // ✅ runtime safe
 
 export type CalendarEvent = {
     id: string;
@@ -280,6 +281,7 @@ export async function getUpcomingEvents(): Promise<{ events: CalendarEvent[], lo
     if (viviendas) {
         for (const v of viviendas) {
             log(`Checking property: ${v.nombre} (Airbnb: ${v.ical_airbnb ? 'YES' : 'NO'}, Booking: ${v.ical_booking ? 'YES' : 'NO'})`);
+
             // Airbnb
             if (v.ical_airbnb && v.ical_airbnb.trim() !== "") {
                 try {
@@ -292,6 +294,7 @@ export async function getUpcomingEvents(): Promise<{ events: CalendarEvent[], lo
                     log(`Error fetching Airbnb iCal for ${v.nombre}: ${e.message}`);
                 }
             }
+
             // Booking
             if (v.ical_booking && v.ical_booking.trim() !== "") {
                 try {
