@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, Download, Calculator } from "lucide-react";
+import { Plus, Trash2, Download, Calculator, Pencil, Eye, EyeOff } from "lucide-react";
 import { differenceInDays, format, parseISO } from "date-fns";
+import { PlatformLogo } from "@/components/platform-logo";
 import { es } from "date-fns/locale";
 import * as XLSX from "xlsx";
 
@@ -20,6 +21,9 @@ export default function RentalsPage() {
     const [viviendas, setViviendas] = useState<any[]>([]);
     const [plataformas, setPlataformas] = useState<any[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [showZeroPrice, setShowZeroPrice] = useState(false);
+    const [isComisionManual, setIsComisionManual] = useState(false);
 
     const [formData, setFormData] = useState({
         vivienda_id: "",
@@ -31,6 +35,9 @@ export default function RentalsPage() {
         precio_neto: 0,
         noches: 0,
         precio_medio_diario: 0,
+        comentarios: "",
+        fecha_peticion: "",
+        dias_antelacion: 0
     });
 
     useEffect(() => {
@@ -46,6 +53,13 @@ export default function RentalsPage() {
         if (p) setPlataformas(p);
     }
 
+    const filteredRentals = useMemo(() => {
+        if (showZeroPrice) {
+            return rentals.filter(r => Number(r.precio_bruto) === 0);
+        }
+        return rentals.filter(r => Number(r.precio_bruto) > 0);
+    }, [rentals, showZeroPrice]);
+
     // Cálculos automáticos
     useEffect(() => {
         if (formData.fecha_entrada && formData.fecha_salida && formData.precio_bruto > 0) {
@@ -56,11 +70,10 @@ export default function RentalsPage() {
             if (noches > 0) {
                 let comision = formData.comision_valor;
 
-                // Si no se ha editado manualmente la comisión, calculamos según plataforma
-                if (formData.plataforma_id && formData.comision_valor === 0) {
+                if (formData.plataforma_id && !isComisionManual) {
                     const plat = plataformas.find(p => p.id === formData.plataforma_id);
                     if (plat) {
-                        comision = (formData.precio_bruto * plat.comision_porcentaje) / 100;
+                        comision = (formData.precio_bruto * Number(plat.comision_porcentaje)) / 100;
                     }
                 }
 
@@ -76,27 +89,86 @@ export default function RentalsPage() {
                 }));
             }
         }
-    }, [formData.fecha_entrada, formData.fecha_salida, formData.precio_bruto, formData.plataforma_id]);
+    }, [formData.fecha_entrada, formData.fecha_salida, formData.precio_bruto, formData.plataforma_id, isComisionManual, plataformas]);
+
+    // Cálculo de antelación
+    useEffect(() => {
+        if (formData.fecha_entrada && formData.fecha_peticion) {
+            const entrada = parseISO(formData.fecha_entrada);
+            const peticion = parseISO(formData.fecha_peticion);
+            const antelacion = differenceInDays(entrada, peticion);
+            setFormData(prev => ({ ...prev, dias_antelacion: antelacion }));
+        }
+    }, [formData.fecha_entrada, formData.fecha_peticion]);
 
     async function handleSubmit() {
         if (!formData.vivienda_id || !formData.plataforma_id || !formData.fecha_entrada || !formData.fecha_salida || formData.precio_bruto <= 0) {
             return toast.error("Por favor rellena todos los campos obligatorios");
         }
 
-        const { error } = await supabase.from("alquileres").insert([formData]);
-        if (error) toast.error("Error al registrar el alquiler");
+        let error;
+        if (editingId) {
+            const { error: updateError } = await supabase
+                .from("alquileres")
+                .update(formData)
+                .eq("id", editingId);
+            error = updateError;
+        } else {
+            const { error: insertError } = await supabase
+                .from("alquileres")
+                .insert([formData]);
+            error = insertError;
+        }
+
+        if (error) toast.error("Error al guardar el alquiler");
         else {
-            toast.success("Alquiler registrado con éxito");
+            toast.success(editingId ? "Alquiler actualizado" : "Alquiler registrado con éxito");
             setIsModalOpen(false);
-            setFormData({
-                vivienda_id: "", plataforma_id: "", fecha_entrada: "", fecha_salida: "",
-                precio_bruto: 0, comision_valor: 0, precio_neto: 0, noches: 0, precio_medio_diario: 0
-            });
+            resetForm();
             fetchData();
         }
     }
 
+    function resetForm() {
+        const defaultVivienda = viviendas.length === 1 ? viviendas[0].id : "";
+        setEditingId(null);
+        setIsComisionManual(false);
+        setFormData({
+            vivienda_id: defaultVivienda, plataforma_id: "", fecha_entrada: "", fecha_salida: "",
+            precio_bruto: 0, comision_valor: 0, precio_neto: 0, noches: 0, precio_medio_diario: 0,
+            comentarios: "",
+            fecha_peticion: "",
+            dias_antelacion: 0
+        });
+    }
+
+    function handleEdit(rental: any) {
+        setEditingId(rental.id);
+        setFormData({
+            vivienda_id: rental.vivienda_id,
+            plataforma_id: rental.plataforma_id,
+            fecha_entrada: rental.fecha_entrada,
+            fecha_salida: rental.fecha_salida,
+            precio_bruto: rental.precio_bruto,
+            comision_valor: rental.comision_valor,
+            precio_neto: rental.precio_neto || 0,
+            noches: rental.noches || 0,
+            precio_medio_diario: rental.precio_medio_diario || 0,
+            comentarios: rental.comentarios || "",
+            fecha_peticion: rental.fecha_peticion || "",
+            dias_antelacion: rental.dias_antelacion || 0
+        });
+        setIsComisionManual(Number(rental.comision_valor) > 0); // Solo bloqueamos si ya había una comisión puesta
+        setIsModalOpen(true);
+    }
+
+    function handleCreate() {
+        resetForm();
+        setIsModalOpen(true);
+    }
+
     async function deleteRental(id: string) {
+        if (!confirm("¿Estás seguro de eliminar este alquiler?")) return;
         const { error } = await supabase.from("alquileres").delete().eq("id", id);
         if (error) toast.error("Error al eliminar");
         else {
@@ -115,7 +187,10 @@ export default function RentalsPage() {
             Bruto: r.precio_bruto,
             Comisión: r.comision_valor,
             Neto: r.precio_neto,
-            ADR: r.precio_medio_diario
+            "Precio diario": r.precio_medio_diario,
+            Comentarios: r.comentarios,
+            "Fecha Petición": r.fecha_peticion,
+            "Antelación (días)": r.dias_antelacion
         }));
 
         const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -126,24 +201,35 @@ export default function RentalsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Gestión de Alquileres</h1>
-                    <p className="text-muted-foreground">Listado completo y registro de reservas.</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Gestión de Alquileres</h1>
+                    <p className="text-muted-foreground text-sm sm:text-base">Listado completo y registro de reservas.</p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={exportToExcel}><Download className="h-4 w-4 mr-2" /> Exportar a Excel</Button>
-                    <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                <div className="flex flex-col xs:flex-row gap-2 w-full sm:w-auto">
+                    <Button
+                        variant={showZeroPrice ? "destructive" : "outline"}
+                        onClick={() => setShowZeroPrice(!showZeroPrice)}
+                        className="w-full xs:w-auto text-xs sm:text-sm"
+                    >
+                        {showZeroPrice ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                        {showZeroPrice ? "Ver Activos" : "Gestionar Sin Precio"}
+                    </Button>
+                    <Button variant="outline" onClick={exportToExcel} className="w-full xs:w-auto text-xs sm:text-sm"><Download className="h-4 w-4 mr-2" /> Exportar</Button>
+                    <Dialog open={isModalOpen} onOpenChange={(open) => {
+                        setIsModalOpen(open);
+                        if (!open) resetForm();
+                    }}>
                         <DialogTrigger asChild>
-                            <Button><Plus className="h-4 w-4 mr-2" /> Nuevo Alquiler</Button>
+                            <Button onClick={handleCreate} className="w-full xs:w-auto text-xs sm:text-sm"><Plus className="h-4 w-4 mr-2" /> Nuevo Alquiler</Button>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-[600px]">
-                            <DialogHeader><DialogTitle>Registrar Alquiler</DialogTitle></DialogHeader>
+                            <DialogHeader><DialogTitle>{editingId ? "Editar Alquiler" : "Registrar Alquiler"}</DialogTitle></DialogHeader>
                             <div className="grid gap-4 py-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
                                         <Label>Vivienda</Label>
-                                        <Select onValueChange={(v) => setFormData({ ...formData, vivienda_id: v })}>
+                                        <Select value={formData.vivienda_id} onValueChange={(v) => setFormData({ ...formData, vivienda_id: v })}>
                                             <SelectTrigger><SelectValue placeholder="Selecciona..." /></SelectTrigger>
                                             <SelectContent>
                                                 {viviendas.map(v => <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>)}
@@ -152,7 +238,10 @@ export default function RentalsPage() {
                                     </div>
                                     <div className="grid gap-2">
                                         <Label>Plataforma</Label>
-                                        <Select onValueChange={(v) => setFormData({ ...formData, plataforma_id: v })}>
+                                        <Select value={formData.plataforma_id} onValueChange={(v) => {
+                                            setFormData({ ...formData, plataforma_id: v });
+                                            setIsComisionManual(false); // Forzamos recálculo al cambiar plataforma
+                                        }}>
                                             <SelectTrigger><SelectValue placeholder="Selecciona..." /></SelectTrigger>
                                             <SelectContent>
                                                 {plataformas.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
@@ -163,11 +252,20 @@ export default function RentalsPage() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
                                         <Label>Fecha Entrada</Label>
-                                        <Input type="date" value={formData.fecha_entrada} onChange={e => setFormData({ ...formData, fecha_entrada: e.target.value })} />
+                                        <Input type="date" value={formData.fecha_entrada} onChange={e => {
+                                            const newEntrada = e.target.value;
+                                            let newSalida = formData.fecha_salida;
+                                            if (!newSalida || newSalida <= newEntrada) {
+                                                const d = new Date(newEntrada);
+                                                d.setDate(d.getDate() + 1);
+                                                newSalida = d.toISOString().split('T')[0];
+                                            }
+                                            setFormData({ ...formData, fecha_entrada: newEntrada, fecha_salida: newSalida });
+                                        }} />
                                     </div>
                                     <div className="grid gap-2">
                                         <Label>Fecha Salida</Label>
-                                        <Input type="date" value={formData.fecha_salida} onChange={e => setFormData({ ...formData, fecha_salida: e.target.value })} />
+                                        <Input type="date" min={formData.fecha_entrada} value={formData.fecha_salida} onChange={e => setFormData({ ...formData, fecha_salida: e.target.value })} />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -177,24 +275,40 @@ export default function RentalsPage() {
                                     </div>
                                     <div className="grid gap-2">
                                         <Label>Comisión (€) - Editable</Label>
-                                        <Input type="number" value={formData.comision_valor} onChange={e => setFormData({ ...formData, comision_valor: Number(e.target.value) })} />
+                                        <Input
+                                            type="number"
+                                            value={formData.comision_valor}
+                                            onChange={e => {
+                                                setFormData({ ...formData, comision_valor: Number(e.target.value) });
+                                                setIsComisionManual(true);
+                                            }}
+                                        />
                                     </div>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>Fecha Petición / Reserva</Label>
+                                    <Input type="date" value={formData.fecha_peticion} onChange={e => setFormData({ ...formData, fecha_peticion: e.target.value })} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>Comentarios</Label>
+                                    <Input placeholder="Notas adicionales..." value={formData.comentarios} onChange={e => setFormData({ ...formData, comentarios: e.target.value })} />
                                 </div>
                                 <Card className="bg-muted/50 border-dashed">
                                     <CardContent className="pt-6 grid grid-cols-3 gap-4 text-center">
                                         <div><Label className="text-xs uppercase">Noches</Label><div className="text-xl font-bold">{formData.noches}</div></div>
+                                        <div><Label className="text-xs uppercase">Antelación</Label><div className="text-xl font-bold">{formData.dias_antelacion}d</div></div>
                                         <div><Label className="text-xs uppercase">Neto</Label><div className="text-xl font-bold text-emerald-600">{formData.precio_neto.toFixed(2)}€</div></div>
-                                        <div><Label className="text-xs uppercase">ADR</Label><div className="text-xl font-bold">{formData.precio_medio_diario.toFixed(2)}€</div></div>
+                                        <div><Label className="text-xs uppercase">Precio diario</Label><div className="text-xl font-bold">{formData.precio_medio_diario.toFixed(2)}€</div></div>
                                     </CardContent>
                                 </Card>
-                                <Button onClick={handleSubmit} className="w-full">Guardar Reservas</Button>
+                                <Button onClick={handleSubmit} className="w-full">{editingId ? "Actualizar Alquiler" : "Guardar Reserva"}</Button>
                             </div>
                         </DialogContent>
                     </Dialog>
                 </div>
             </div>
 
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -206,28 +320,42 @@ export default function RentalsPage() {
                             <TableHead className="text-right">Bruto</TableHead>
                             <TableHead className="text-right">Comisión</TableHead>
                             <TableHead className="text-right font-bold">Neto</TableHead>
-                            <TableHead className="w-[80px]"></TableHead>
+                            <TableHead>Petición</TableHead>
+                            <TableHead>Antel.</TableHead>
+                            <TableHead>Comentarios</TableHead>
+                            <TableHead className="w-[100px]"></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {rentals.map((r) => (
+                        {filteredRentals.map((r) => (
                             <TableRow key={r.id}>
                                 <TableCell>{r.viviendas?.nombre}</TableCell>
-                                <TableCell>{r.plataformas?.nombre}</TableCell>
+                                <TableCell>
+                                    <div className="flex items-center gap-2">
+                                        <PlatformLogo platform={r.plataformas?.nombre} className="h-4 w-4" />
+                                        <span className="hidden sm:inline">{r.plataformas?.nombre}</span>
+                                    </div>
+                                </TableCell>
                                 <TableCell>{format(parseISO(r.fecha_entrada), "dd MMM yyyy", { locale: es })}</TableCell>
                                 <TableCell>{format(parseISO(r.fecha_salida), "dd MMM yyyy", { locale: es })}</TableCell>
                                 <TableCell>{r.noches}</TableCell>
                                 <TableCell className="text-right">{Number(r.precio_bruto).toFixed(2)}€</TableCell>
                                 <TableCell className="text-right">{Number(r.comision_valor).toFixed(2)}€</TableCell>
                                 <TableCell className="text-right font-bold text-emerald-600">{Number(r.precio_neto).toFixed(2)}€</TableCell>
-                                <TableCell>
+                                <TableCell>{r.fecha_peticion ? format(parseISO(r.fecha_peticion), "dd/MM/yyyy") : "-"}</TableCell>
+                                <TableCell>{r.dias_antelacion != null ? `${r.dias_antelacion}d` : "-"}</TableCell>
+                                <TableCell className="max-w-[150px] truncate" title={r.comentarios}>{r.comentarios}</TableCell>
+                                <TableCell className="flex gap-2">
+                                    <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4 text-blue-500" /></Button>
                                     <Button variant="ghost" size="icon" onClick={() => deleteRental(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                 </TableCell>
                             </TableRow>
                         ))}
-                        {rentals.length === 0 && (
+                        {filteredRentals.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No hay alquileres registrados.</TableCell>
+                                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                                    {showZeroPrice ? "No hay alquileres sin precio pendientes." : "No hay alquileres registrados."}
+                                </TableCell>
                             </TableRow>
                         )}
                     </TableBody>
@@ -236,3 +364,4 @@ export default function RentalsPage() {
         </div>
     );
 }
+
