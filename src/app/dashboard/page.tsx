@@ -318,7 +318,7 @@ export default function DashboardsPage() {
             </div>
 
             <Dialog open={!!selectedCell} onOpenChange={() => setSelectedCell(null)}>
-                <DialogContent className="max-w-3xl">
+                <DialogContent className="w-[95vw] max-w-5xl">
                     <DialogHeader>
                         <DialogTitle>Detalle Alquileres: {MESES[selectedCell?.mes || 0]} {selectedCell?.año}</DialogTitle>
                     </DialogHeader>
@@ -329,6 +329,8 @@ export default function DashboardsPage() {
                                     <TableHead>Casa</TableHead>
                                     <TableHead>Plataforma</TableHead>
                                     <TableHead>Entrada</TableHead>
+                                    <TableHead>Salida</TableHead>
+                                    <TableHead className="text-right">Noches</TableHead>
                                     <TableHead className="text-right">Neto</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -343,11 +345,17 @@ export default function DashboardsPage() {
                                             </div>
                                         </TableCell>
                                         <TableCell>{format(parseISO(r.fecha_entrada), "dd/MM/yyyy")}</TableCell>
+                                        <TableCell>
+                                            {r.fecha_salida ? format(parseISO(r.fecha_salida), "dd/MM/yyyy") : "-"}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {r.noches != null ? Number(r.noches) : "-"}
+                                        </TableCell>
                                         <TableCell className="text-right font-bold">{Number(r.precio_neto).toFixed(2)}€</TableCell>
                                     </TableRow>
                                 ))}
                                 {selectedCell?.rentals.length === 0 && (
-                                    <TableRow><TableCell colSpan={4} className="text-center py-4">Sin datos para este mes.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={6} className="text-center py-4">Sin datos para este mes.</TableCell></TableRow>
                                 )}
                             </TableBody>
                         </Table>
