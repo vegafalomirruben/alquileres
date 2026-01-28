@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, Download, Calculator, Pencil, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, Download, Calculator, Pencil, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { differenceInDays, format, parseISO } from "date-fns";
 import { PlatformLogo } from "@/components/platform-logo";
 import { es } from "date-fns/locale";
@@ -24,6 +24,8 @@ export default function RentalsPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [showZeroPrice, setShowZeroPrice] = useState(false);
     const [isComisionManual, setIsComisionManual] = useState(false);
+    const [sortColumn, setSortColumn] = useState<string | null>("entrada");
+    const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
     const [formData, setFormData] = useState({
         vivienda_id: "",
@@ -54,11 +56,91 @@ export default function RentalsPage() {
     }
 
     const filteredRentals = useMemo(() => {
-        if (showZeroPrice) {
-            return rentals.filter(r => Number(r.precio_bruto) === 0);
+        let filtered = showZeroPrice 
+            ? rentals.filter(r => Number(r.precio_bruto) === 0)
+            : rentals.filter(r => Number(r.precio_bruto) > 0);
+
+        // Aplicar ordenamiento
+        if (sortColumn) {
+            filtered = [...filtered].sort((a, b) => {
+                let aVal: any;
+                let bVal: any;
+
+                switch (sortColumn) {
+                    case "casa":
+                        aVal = a.viviendas?.nombre || "";
+                        bVal = b.viviendas?.nombre || "";
+                        break;
+                    case "plataforma":
+                        aVal = a.plataformas?.nombre || "";
+                        bVal = b.plataformas?.nombre || "";
+                        break;
+                    case "entrada":
+                        aVal = a.fecha_entrada ? new Date(a.fecha_entrada).getTime() : 0;
+                        bVal = b.fecha_entrada ? new Date(b.fecha_entrada).getTime() : 0;
+                        break;
+                    case "salida":
+                        aVal = a.fecha_salida ? new Date(a.fecha_salida).getTime() : 0;
+                        bVal = b.fecha_salida ? new Date(b.fecha_salida).getTime() : 0;
+                        break;
+                    case "noches":
+                        aVal = Number(a.noches) || 0;
+                        bVal = Number(b.noches) || 0;
+                        break;
+                    case "bruto":
+                        aVal = Number(a.precio_bruto) || 0;
+                        bVal = Number(b.precio_bruto) || 0;
+                        break;
+                    case "comision":
+                        aVal = Number(a.comision_valor) || 0;
+                        bVal = Number(b.comision_valor) || 0;
+                        break;
+                    case "neto":
+                        aVal = Number(a.precio_neto) || 0;
+                        bVal = Number(b.precio_neto) || 0;
+                        break;
+                    case "peticion":
+                        aVal = a.fecha_peticion ? new Date(a.fecha_peticion).getTime() : 0;
+                        bVal = b.fecha_peticion ? new Date(b.fecha_peticion).getTime() : 0;
+                        break;
+                    case "antelacion":
+                        aVal = Number(a.dias_antelacion) || 0;
+                        bVal = Number(b.dias_antelacion) || 0;
+                        break;
+                    case "comentarios":
+                        aVal = (a.comentarios || "").toLowerCase();
+                        bVal = (b.comentarios || "").toLowerCase();
+                        break;
+                    default:
+                        return 0;
+                }
+
+                // Comparación según el tipo
+                if (typeof aVal === "string" && typeof bVal === "string") {
+                    return sortDirection === "asc" 
+                        ? aVal.localeCompare(bVal)
+                        : bVal.localeCompare(aVal);
+                } else {
+                    return sortDirection === "asc" 
+                        ? aVal - bVal
+                        : bVal - aVal;
+                }
+            });
         }
-        return rentals.filter(r => Number(r.precio_bruto) > 0);
-    }, [rentals, showZeroPrice]);
+
+        return filtered;
+    }, [rentals, showZeroPrice, sortColumn, sortDirection]);
+
+    function handleSort(column: string) {
+        if (sortColumn === column) {
+            // Si es la misma columna, alternar dirección
+            setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+        } else {
+            // Nueva columna, empezar con descendente
+            setSortColumn(column);
+            setSortDirection("desc");
+        }
+    }
 
     // Cálculos automáticos
     useEffect(() => {
@@ -312,17 +394,149 @@ export default function RentalsPage() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Casa</TableHead>
-                            <TableHead>Plataforma</TableHead>
-                            <TableHead>Entrada</TableHead>
-                            <TableHead>Salida</TableHead>
-                            <TableHead>Noches</TableHead>
-                            <TableHead className="text-right">Bruto</TableHead>
-                            <TableHead className="text-right">Comisión</TableHead>
-                            <TableHead className="text-right font-bold">Neto</TableHead>
-                            <TableHead>Petición</TableHead>
-                            <TableHead>Antel.</TableHead>
-                            <TableHead>Comentarios</TableHead>
+                            <TableHead 
+                                className="cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("casa")}
+                            >
+                                <div className="flex items-center gap-2">
+                                    Casa
+                                    {sortColumn === "casa" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
+                            <TableHead 
+                                className="cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("plataforma")}
+                            >
+                                <div className="flex items-center gap-2">
+                                    Plataforma
+                                    {sortColumn === "plataforma" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
+                            <TableHead 
+                                className="cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("entrada")}
+                            >
+                                <div className="flex items-center gap-2">
+                                    Entrada
+                                    {sortColumn === "entrada" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
+                            <TableHead 
+                                className="cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("salida")}
+                            >
+                                <div className="flex items-center gap-2">
+                                    Salida
+                                    {sortColumn === "salida" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
+                            <TableHead 
+                                className="cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("noches")}
+                            >
+                                <div className="flex items-center gap-2">
+                                    Noches
+                                    {sortColumn === "noches" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
+                            <TableHead 
+                                className="text-right cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("bruto")}
+                            >
+                                <div className="flex items-center justify-end gap-2">
+                                    Bruto
+                                    {sortColumn === "bruto" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
+                            <TableHead 
+                                className="text-right cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("comision")}
+                            >
+                                <div className="flex items-center justify-end gap-2">
+                                    Comisión
+                                    {sortColumn === "comision" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
+                            <TableHead 
+                                className="text-right font-bold cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("neto")}
+                            >
+                                <div className="flex items-center justify-end gap-2">
+                                    Neto
+                                    {sortColumn === "neto" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
+                            <TableHead 
+                                className="cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("peticion")}
+                            >
+                                <div className="flex items-center gap-2">
+                                    Petición
+                                    {sortColumn === "peticion" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
+                            <TableHead 
+                                className="cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("antelacion")}
+                            >
+                                <div className="flex items-center gap-2">
+                                    Antel.
+                                    {sortColumn === "antelacion" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
+                            <TableHead 
+                                className="cursor-pointer hover:bg-muted/50 select-none"
+                                onClick={() => handleSort("comentarios")}
+                            >
+                                <div className="flex items-center gap-2">
+                                    Comentarios
+                                    {sortColumn === "comentarios" ? (
+                                        sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                                    ) : (
+                                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                                    )}
+                                </div>
+                            </TableHead>
                             <TableHead className="w-[100px]"></TableHead>
                         </TableRow>
                     </TableHeader>
