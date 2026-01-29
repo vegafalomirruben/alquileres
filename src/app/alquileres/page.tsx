@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Trash2, Download, Calculator, Pencil, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { differenceInDays, format, parseISO } from "date-fns";
+import { addDays, differenceInDays, format, parseISO, startOfDay } from "date-fns";
 import { PlatformLogo } from "@/components/platform-logo";
 import { es } from "date-fns/locale";
 import * as XLSX from "xlsx";
@@ -541,7 +541,13 @@ export default function RentalsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredRentals.map((r) => (
+                        {filteredRentals.map((r) => {
+                            const today = startOfDay(new Date());
+                            const tomorrow = addDays(today, 1);
+                            const entryDate = r.fecha_entrada ? startOfDay(parseISO(r.fecha_entrada)) : null;
+                            // Marcar bruto si entrada es pasada, hoy o queda 1 día (mañana)
+                            const shouldHighlightBruto = showZeroPrice && entryDate && entryDate.getTime() <= tomorrow.getTime();
+                            return (
                             <TableRow key={r.id}>
                                 <TableCell>{r.viviendas?.nombre}</TableCell>
                                 <TableCell>
@@ -553,7 +559,7 @@ export default function RentalsPage() {
                                 <TableCell>{format(parseISO(r.fecha_entrada), "dd MMM yyyy", { locale: es })}</TableCell>
                                 <TableCell>{format(parseISO(r.fecha_salida), "dd MMM yyyy", { locale: es })}</TableCell>
                                 <TableCell>{r.noches}</TableCell>
-                                <TableCell className="text-right">{Number(r.precio_bruto).toFixed(2)}€</TableCell>
+                                <TableCell className={`text-right ${shouldHighlightBruto ? "bg-amber-100 dark:bg-amber-900/40" : ""}`}>{Number(r.precio_bruto).toFixed(2)}€</TableCell>
                                 <TableCell className="text-right">{Number(r.comision_valor).toFixed(2)}€</TableCell>
                                 <TableCell className="text-right font-bold text-emerald-600">{Number(r.precio_neto).toFixed(2)}€</TableCell>
                                 <TableCell>{r.fecha_peticion ? format(parseISO(r.fecha_peticion), "dd/MM/yyyy") : "-"}</TableCell>
@@ -564,7 +570,8 @@ export default function RentalsPage() {
                                     <Button variant="ghost" size="icon" onClick={() => deleteRental(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                 </TableCell>
                             </TableRow>
-                        ))}
+                            );
+                        })}
                         {filteredRentals.length === 0 && (
                             <TableRow>
                                 <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
