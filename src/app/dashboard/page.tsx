@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, parseISO, getMonth, getYear } from "date-fns";
 import { es } from "date-fns/locale";
-import { TrendingUp, Wallet, ArrowDown, LayoutDashboard, Filter } from "lucide-react";
+import { TrendingUp, Wallet, ArrowDown, LayoutDashboard, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { PlatformLogo } from "@/components/platform-logo";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -29,6 +29,7 @@ export default function DashboardsPage() {
     });
     const [viviendas, setViviendas] = useState<any[]>([]);
     const [selectedProperty, setSelectedProperty] = useState<string>("all");
+    const [expandedDashboards, setExpandedDashboards] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         async function fetchData() {
@@ -183,68 +184,75 @@ export default function DashboardsPage() {
         setSelectedCell({ mes, año, rentals: filtered });
     };
 
-    const renderMatrix = (title: string, dataBundle: any, isCurrency: boolean = true) => {
+    const renderMatrixTable = (dataBundle: any, isCurrency: boolean = true) => {
         const { matrix, colTotals, rowTotals, grandTotal } = dataBundle;
         return (
-            <Card className="overflow-hidden">
-                <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
-                <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="bg-muted w-32">Mes / Año</TableHead>
-                                    {years.map(year => <TableHead key={year} className="text-center bg-muted">{year}</TableHead>)}
-                                    <TableHead className="text-center bg-muted font-bold">Total</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {MESES.map((mes, idx) => (
-                                    <TableRow key={mes}>
-                                        <TableCell className="font-medium bg-muted/50">{mes}</TableCell>
-                                        {years.map(year => (
-                                            <TableCell
-                                                key={`${year}-${idx}`}
-                                                className="text-center cursor-pointer hover:bg-primary/10 transition-colors"
-                                                onClick={() => handleCellClick(idx, year)}
-                                            >
-                                                {isCurrency
-                                                    ? (matrix[year][idx] > 0 ? `${matrix[year][idx].toFixed(2)}€` : "-")
-                                                    : (matrix[year][idx] > 0 ? matrix[year][idx].toFixed(2) : "-")
-                                                }
-                                            </TableCell>
-                                        ))}
-                                        <TableCell className="text-center font-bold bg-muted/30">
-                                            {isCurrency
-                                                ? (rowTotals[idx] > 0 ? `${rowTotals[idx].toFixed(2)}€` : "-")
-                                                : (rowTotals[idx] > 0 ? rowTotals[idx].toFixed(2) : "-")
-                                            }
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                <TableRow className="bg-muted font-bold">
-                                    <TableCell>Total</TableCell>
-                                    {years.map(year => (
-                                        <TableCell key={`total-${year}`} className="text-center">
-                                            {isCurrency
-                                                ? (colTotals[year] > 0 ? `${colTotals[year].toFixed(2)}€` : "-")
-                                                : (colTotals[year] > 0 ? colTotals[year].toFixed(2) : "-")
-                                            }
-                                        </TableCell>
-                                    ))}
-                                    <TableCell className="text-center text-primary">
+            <div className="overflow-x-auto">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="bg-muted w-32">Mes / Año</TableHead>
+                            {years.map(year => <TableHead key={year} className="text-center bg-muted">{year}</TableHead>)}
+                            <TableHead className="text-center bg-muted font-bold">Total</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {MESES.map((mes, idx) => (
+                            <TableRow key={mes}>
+                                <TableCell className="font-medium bg-muted/50">{mes}</TableCell>
+                                {years.map(year => (
+                                    <TableCell
+                                        key={`${year}-${idx}`}
+                                        className="text-center cursor-pointer hover:bg-primary/10 transition-colors"
+                                        onClick={() => handleCellClick(idx, year)}
+                                    >
                                         {isCurrency
-                                            ? (grandTotal > 0 ? `${grandTotal.toFixed(2)}€` : "-")
-                                            : (grandTotal > 0 ? grandTotal.toFixed(2) : "-")
+                                            ? (matrix[year][idx] > 0 ? `${matrix[year][idx].toFixed(2)}€` : "-")
+                                            : (matrix[year][idx] > 0 ? matrix[year][idx].toFixed(2) : "-")
                                         }
                                     </TableCell>
-                                </TableRow>
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
+                                ))}
+                                <TableCell className="text-center font-bold bg-muted/30">
+                                    {isCurrency
+                                        ? (rowTotals[idx] > 0 ? `${rowTotals[idx].toFixed(2)}€` : "-")
+                                        : (rowTotals[idx] > 0 ? rowTotals[idx].toFixed(2) : "-")
+                                    }
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                        <TableRow className="bg-muted font-bold">
+                            <TableCell>Total</TableCell>
+                            {years.map(year => (
+                                <TableCell key={`total-${year}`} className="text-center">
+                                    {isCurrency
+                                        ? (colTotals[year] > 0 ? `${colTotals[year].toFixed(2)}€` : "-")
+                                        : (colTotals[year] > 0 ? colTotals[year].toFixed(2) : "-")
+                                    }
+                                </TableCell>
+                            ))}
+                            <TableCell className="text-center text-primary">
+                                {isCurrency
+                                    ? (grandTotal > 0 ? `${grandTotal.toFixed(2)}€` : "-")
+                                    : (grandTotal > 0 ? grandTotal.toFixed(2) : "-")
+                                }
+                            </TableCell>
+                        </TableRow>
+                    </TableBody>
+                </Table>
+            </div>
         );
+    };
+
+    const dashboardItems: { title: string; metric: "neto" | "bruto" | "adr" | "real" | "gastos"; isCurrency: boolean }[] = [
+        { title: "Ingreso Real (Neto - Gastos)", metric: "real", isCurrency: true },
+        { title: "Total Gastos (€)", metric: "gastos", isCurrency: true },
+        { title: "Suma de Precio Neto (€)", metric: "neto", isCurrency: true },
+        { title: "Suma de Precio Bruto (€)", metric: "bruto", isCurrency: true },
+        { title: "Precio diario (Promedio)", metric: "adr", isCurrency: true },
+    ];
+
+    const toggleDashboard = (title: string) => {
+        setExpandedDashboards(prev => ({ ...prev, [title]: !prev[title] }));
     };
 
     return (
@@ -309,12 +317,27 @@ export default function DashboardsPage() {
                 </Card>
             </div>
 
-            <div className="grid gap-8">
-                {renderMatrix("Ingreso Real (Neto - Gastos)", getMatrixData("real"))}
-                {renderMatrix("Total Gastos (€)", getMatrixData("gastos"))}
-                {renderMatrix("Suma de Precio Neto (€)", getMatrixData("neto"))}
-                {renderMatrix("Suma de Precio Bruto (€)", getMatrixData("bruto"))}
-                {renderMatrix("Precio diario (Promedio)", getMatrixData("adr"), true)}
+            <div className="space-y-2">
+                {dashboardItems.map(({ title, metric, isCurrency }) => (
+                    <Card key={title} className="overflow-hidden">
+                        <CardHeader
+                            className="cursor-pointer hover:bg-muted/50 flex flex-row items-center justify-between py-4 transition-colors"
+                            onClick={() => toggleDashboard(title)}
+                        >
+                            <CardTitle className="text-base">{title}</CardTitle>
+                            {expandedDashboards[title] ? (
+                                <ChevronUp className="h-5 w-5 text-muted-foreground shrink-0" />
+                            ) : (
+                                <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
+                            )}
+                        </CardHeader>
+                        {expandedDashboards[title] && (
+                            <CardContent className="p-0 border-t">
+                                {renderMatrixTable(getMatrixData(metric), isCurrency)}
+                            </CardContent>
+                        )}
+                    </Card>
+                ))}
             </div>
 
             <Dialog open={!!selectedCell} onOpenChange={() => setSelectedCell(null)}>
