@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Home, Building2, CreditCard, LayoutDashboard, Settings, Calendar as CalendarIcon, Menu, X, Users, LogOut, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 export function Navbar() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -49,8 +51,8 @@ export function Navbar() {
                                 key={link.href}
                                 href={link.href}
                                 className={`px-4 py-2 rounded-full transition-all flex items-center gap-2 group ${isActive
-                                        ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20"
-                                        : "text-slate-600 hover:text-blue-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                                    ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20"
+                                    : "text-slate-600 hover:text-blue-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
                                     }`}
                             >
                                 <link.icon className={`h-4 w-4 transition-transform group-hover:scale-110 ${isActive ? "text-blue-600" : "text-slate-400 group-hover:text-blue-600"}`} />
@@ -60,12 +62,18 @@ export function Navbar() {
                     })}
                 </nav>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-4">
+                    <div className="hidden md:flex flex-col items-end mr-2">
+                        <span className="text-sm font-semibold capitalize text-slate-700">
+                            {format(new Date(), "EEEE, d MMMM yyyy", { locale: es })}
+                        </span>
+                    </div>
+
                     <Button
                         variant="ghost"
                         size="sm"
                         onClick={handleLogout}
-                        className="hidden sm:flex text-slate-500 hover:text-rose-600 hover:bg-rose-50 gap-2 items-center"
+                        className="hidden sm:flex text-slate-500 hover:text-rose-600 hover:bg-rose-50 gap-2 items-center rounded-full"
                     >
                         <LogOut className="h-4 w-4" />
                         <span>Salir</span>
@@ -91,8 +99,8 @@ export function Navbar() {
                                     href={link.href}
                                     onClick={() => setIsMenuOpen(false)}
                                     className={`flex items-center gap-3 text-sm font-medium transition-all p-3 rounded-xl ${isActive
-                                            ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600"
-                                            : "text-slate-600 hover:bg-slate-100"
+                                        ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600"
+                                        : "text-slate-600 hover:bg-slate-100"
                                         }`}
                                 >
                                     <link.icon className="h-5 w-5" />
