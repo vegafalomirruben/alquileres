@@ -223,25 +223,43 @@ export default function CalendarPage() {
                                                 const dayEvents = getEventsForDay(d);
                                                 const isCurrentMonth = isSameMonth(d, monthDate);
 
-                                                let textColor = "text-emerald-500 font-medium"; // Default no reservation
+                                                let cellClass = "bg-emerald-500/20 text-emerald-700 font-medium"; // Verde suave para libre
+                                                let isStart = false;
+                                                let isEnd = false;
 
                                                 if (dayEvents.length > 0) {
-                                                    const firstEvent = dayEvents[0];
-                                                    if (firstEvent.source === "airbnb") textColor = "text-rose-500 font-bold";
-                                                    else if (firstEvent.source === "booking") textColor = "text-blue-500 font-bold";
-                                                    else textColor = "text-amber-500 font-bold";
+                                                    const ev = dayEvents[0];
+                                                    if (ev.source === "airbnb") cellClass = "bg-rose-500 text-white font-bold";
+                                                    else if (ev.source === "booking") cellClass = "bg-blue-600 text-white font-bold";
+                                                    else cellClass = "bg-amber-500 text-white font-bold";
+
+                                                    // Detect if it's the first or last day of THIS specific reservation
+                                                    const start = startOfDay(parseISO(ev.start));
+                                                    const lastNight = subMonths(addMonths(startOfDay(parseISO(ev.end)), 0), 0); // Need day before end
+                                                    const end = startOfDay(parseISO(ev.end));
+
+                                                    isStart = isSameDay(d, start);
+                                                    // The actual last night occupies the day before "end"
+                                                    const dPlus1 = new Date(d);
+                                                    dPlus1.setDate(dPlus1.getDate() + 1);
+                                                    isEnd = isSameDay(dPlus1, end);
                                                 }
 
                                                 return (
                                                     <div
                                                         key={i}
-                                                        className={`h-6 flex items-center justify-center text-[10px] rounded-sm
-                                                            ${!isCurrentMonth ? "opacity-20 pointer-events-none" : "hover:bg-slate-50 cursor-pointer"}
-                                                            ${textColor}
+                                                        className={`h-6 flex items-center justify-center text-[10px] relative
+                                                            ${!isCurrentMonth ? "opacity-10 pointer-events-none" : "hover:brightness-110 transition-all cursor-pointer"}
+                                                            ${cellClass}
+                                                            ${isStart ? 'rounded-l-md border-l border-white/40' : ''}
+                                                            ${isEnd ? 'rounded-r-md border-r border-white/40' : ''}
+                                                            ${!isStart && !isEnd && dayEvents.length > 0 ? 'border-r border-white/10' : ''}
                                                         `}
+                                                        title={dayEvents.length > 0 ? `${dayEvents[0].vivienda} (${dayEvents[0].source}): ${format(parseISO(dayEvents[0].start), "d MMM")} - ${format(parseISO(dayEvents[0].end), "d MMM")}` : "Libre"}
                                                         onClick={() => isCurrentMonth && openBookingDialog("", d)}
                                                     >
                                                         {format(d, "d")}
+                                                        {isStart && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-black/20 rounded-l-md" />}
                                                     </div>
                                                 );
                                             })}

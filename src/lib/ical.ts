@@ -23,27 +23,26 @@ export async function getUpcomingEvents(): Promise<{ events: CalendarEvent[], lo
 
     log("--- Inicia proceso de sincronización (v3 - ICAL.js) ---");
 
-    // 1. Fetch manual rentals
+    // 1. Fetch all rentals (past and future) to show in annual view
     const { data: rentals } = await supabase
         .from("alquileres")
-        .select("*, viviendas(nombre), plataformas(nombre)")
-        .gte("fecha_salida", new Date().toISOString());
+        .select("*, viviendas(nombre), plataformas(nombre)");
 
     const manualEvents: CalendarEvent[] = (rentals || [])
-        .filter((r: any) => {
-            const platName = r.plataformas?.nombre?.toLowerCase() || "";
-            // Excluimos entradas manuales de Airbnb/Booking porque ya vienen por iCal
-            return !platName.includes("airbnb") && !platName.includes("booking");
-        })
         .map((r: any) => {
-            const isLibre = r.plataformas?.nombre?.toLowerCase().includes("libre");
+            const platName = r.plataformas?.nombre?.toLowerCase() || "";
+            let source: "airbnb" | "booking" | "manual" = "manual";
+            if (platName.includes("airbnb")) source = "airbnb";
+            else if (platName.includes("booking")) source = "booking";
+
+            const isLibre = platName.includes("libre");
             return {
-                id: r.id,
-                title: isLibre ? `LIBRE: ${r.viviendas?.nombre}` : `Reserva Manual (${r.viviendas?.nombre})`,
+                id: r.ical_uid || r.id,
+                title: isLibre ? `LIBRE: ${r.viviendas?.nombre}` : `Reserva (${r.viviendas?.nombre})`,
                 start: new Date(r.fecha_entrada),
                 end: new Date(r.fecha_salida),
                 vivienda: r.viviendas?.nombre || "Desconocida",
-                source: "manual",
+                source: source,
                 plataforma_id: r.plataforma_id,
                 original_price: r.precio_neto
             };
@@ -93,9 +92,12 @@ export async function getUpcomingEvents(): Promise<{ events: CalendarEvent[], lo
         }
     }
 
-    // Merge and sort
-    const allEvents = [...manualEvents, ...icalEvents].sort((a, b) => a.start.getTime() - b.start.getTime());
-    log(`Total events to return: ${allEvents.length}`);
+    // Merge and sort: Include all DB events and add only iCal events that aren't in DB yet
+    const dbIds = new Set(manualEvents.map(e => e.id));
+    const uniqueIcalEvents = icalEvents.filter(ev => !dbIds.has(ev.id));
+
+    const allEvents = [...manualEvents, ...uniqueIcalEvents].sort((a, b) => a.start.getTime() - b.start.getTime());
+    log(`Total events to return: ${allEvents.length} (${manualEvents.length} from DB, ${uniqueIcalEvents.length} new from iCal)`);
 
     // Trigger background sync to Alquileres table
     try {
@@ -180,10 +182,10 @@ async function fetchAndParseIcal(url: string, source: "airbnb" | "booking", vivi
 
             if (start && end) {
                 count++;
-                const now = new Date();
-                now.setDate(now.getDate() - 30);
+                const limitDate = new Date();
+                limitDate.setFullYear(limitDate.getFullYear() - 2); // Show events from last 2 years
 
-                if (end > now) {
+                if (end > limitDate) {
                     const createdVal = vevent.getFirstPropertyValue('created') || vevent.getFirstPropertyValue('dtstamp');
                     const createdDate = createdVal ? (createdVal as ICAL.Time).toJSDate() : undefined;
 
