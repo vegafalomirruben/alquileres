@@ -10,11 +10,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, Download, Calculator, Pencil, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Trash2, Download, Calculator, Pencil, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, FileText } from "lucide-react";
 import { addDays, differenceInDays, format, parseISO, startOfDay } from "date-fns";
 import { PlatformLogo } from "@/components/platform-logo";
 import { es } from "date-fns/locale";
 import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function RentalsPage() {
     const [rentals, setRentals] = useState<any[]>([]);
@@ -42,6 +44,16 @@ export default function RentalsPage() {
         dias_antelacion: 0
     });
 
+    // Receipt Dialog state
+    const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+    const [activeRentalForReceipt, setActiveRentalForReceipt] = useState<any>(null);
+    const [clientData, setClientData] = useState({
+        nombre: "",
+        dni: "",
+        direccion: "",
+        fecha_recibo: format(new Date(), "yyyy-MM-dd")
+    });
+
     useEffect(() => {
         fetchData();
     }, []);
@@ -56,7 +68,7 @@ export default function RentalsPage() {
     }
 
     const filteredRentals = useMemo(() => {
-        let filtered = showZeroPrice 
+        let filtered = showZeroPrice
             ? rentals.filter(r => Number(r.precio_bruto) === 0)
             : rentals.filter(r => Number(r.precio_bruto) > 0);
 
@@ -117,11 +129,11 @@ export default function RentalsPage() {
 
                 // Comparación según el tipo
                 if (typeof aVal === "string" && typeof bVal === "string") {
-                    return sortDirection === "asc" 
+                    return sortDirection === "asc"
                         ? aVal.localeCompare(bVal)
                         : bVal.localeCompare(aVal);
                 } else {
-                    return sortDirection === "asc" 
+                    return sortDirection === "asc"
                         ? aVal - bVal
                         : bVal - aVal;
                 }
@@ -281,6 +293,107 @@ export default function RentalsPage() {
         XLSX.writeFile(wb, "alquileres.xlsx");
     }
 
+    function openReceiptModal(rental: any) {
+        setActiveRentalForReceipt(rental);
+        setClientData(prev => ({
+            ...prev,
+            nombre: "",
+            dni: "",
+            direccion: ""
+        }));
+        setIsReceiptModalOpen(true);
+    }
+
+    function generatePDF() {
+        if (!activeRentalForReceipt) return;
+
+        const doc = new jsPDF();
+        const redColor: [number, number, number] = [192, 0, 0]; // Dark red like the image
+
+        // Header Red Bar
+        doc.setFillColor(redColor[0], redColor[1], redColor[2]);
+        doc.rect(0, 0, 210, 8, "F");
+
+        // Issuer Info
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text("Ruben Vega", 15, 25);
+        doc.setFont("helvetica", "normal");
+        doc.text("Cami Omblanc 72 x", 15, 30);
+
+        // Date Info (Top Right Align)
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("Fecha", 185, 28, { align: "right" });
+        doc.line(170, 30, 200, 30);
+        doc.setFont("helvetica", "normal");
+        const formattedReceiptDate = format(parseISO(clientData.fecha_recibo), "dd/MM/yy");
+        doc.text(formattedReceiptDate, 185, 35, { align: "right" });
+        doc.line(170, 45, 200, 45);
+
+        // Client Section
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(redColor[0], redColor[1], redColor[2]);
+        doc.text("Cliente", 15, 55);
+        doc.line(15, 57, 95, 57);
+        doc.line(110, 57, 195, 57);
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "normal");
+        doc.text(clientData.nombre.toUpperCase(), 15, 65);
+        doc.text(clientData.dni.toUpperCase(), 15, 72);
+        doc.text(clientData.direccion.toUpperCase(), 15, 79);
+
+        // Table
+        const entrada = format(parseISO(activeRentalForReceipt.fecha_entrada), "d 'de' MMMM yyyy", { locale: es });
+        const salida = format(parseISO(activeRentalForReceipt.fecha_salida), "d 'de' MMMM yyyy", { locale: es });
+
+        autoTable(doc, {
+            startY: 95,
+            head: [['Descripción', 'Unidades', 'Precio Unitario', 'Precio']],
+            body: [
+                [`Estancia del ${entrada} al ${salida}`, '1', `${activeRentalForReceipt.precio_bruto.toFixed(2)}`, `${activeRentalForReceipt.precio_bruto.toFixed(2)}`],
+                ['', '', '', ''],
+                ['', '', '', ''],
+                ['', '', '', ''],
+                ['', '', '', ''],
+            ],
+            theme: 'grid',
+            headStyles: {
+                fillColor: redColor,
+                textColor: [255, 255, 255],
+                fontSize: 10,
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { cellWidth: 100 },
+                1: { halign: 'center' },
+                2: { halign: 'right' },
+                3: { halign: 'right' }
+            },
+            styles: {
+                fontSize: 9,
+                cellPadding: 4
+            }
+        });
+
+        // Total
+        const finalY = (doc as any).lastAutoTable.finalY + 2;
+        doc.setFont("helvetica", "bold");
+        doc.text("Total", 160, finalY + 5, { align: "right" });
+        doc.setFont("helvetica", "normal");
+        doc.text(`${activeRentalForReceipt.precio_bruto.toFixed(2)}`, 195, finalY + 5, { align: "right" });
+        doc.line(170, finalY + 7, 200, finalY + 7);
+
+        // Footer Red Bar
+        doc.setFillColor(redColor[0], redColor[1], redColor[2]);
+        doc.rect(0, 287, 210, 10, "F");
+
+        doc.save(`recibo_${activeRentalForReceipt.viviendas?.nombre}_${clientData.nombre.replace(/\s+/g, '_')}.pdf`);
+        setIsReceiptModalOpen(false);
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -394,7 +507,7 @@ export default function RentalsPage() {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead 
+                            <TableHead
                                 className="cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("casa")}
                             >
@@ -407,7 +520,7 @@ export default function RentalsPage() {
                                     )}
                                 </div>
                             </TableHead>
-                            <TableHead 
+                            <TableHead
                                 className="cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("plataforma")}
                             >
@@ -420,7 +533,7 @@ export default function RentalsPage() {
                                     )}
                                 </div>
                             </TableHead>
-                            <TableHead 
+                            <TableHead
                                 className="cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("entrada")}
                             >
@@ -433,7 +546,7 @@ export default function RentalsPage() {
                                     )}
                                 </div>
                             </TableHead>
-                            <TableHead 
+                            <TableHead
                                 className="cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("salida")}
                             >
@@ -446,7 +559,7 @@ export default function RentalsPage() {
                                     )}
                                 </div>
                             </TableHead>
-                            <TableHead 
+                            <TableHead
                                 className="cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("noches")}
                             >
@@ -459,7 +572,7 @@ export default function RentalsPage() {
                                     )}
                                 </div>
                             </TableHead>
-                            <TableHead 
+                            <TableHead
                                 className="text-right cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("bruto")}
                             >
@@ -472,7 +585,7 @@ export default function RentalsPage() {
                                     )}
                                 </div>
                             </TableHead>
-                            <TableHead 
+                            <TableHead
                                 className="text-right cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("comision")}
                             >
@@ -485,7 +598,7 @@ export default function RentalsPage() {
                                     )}
                                 </div>
                             </TableHead>
-                            <TableHead 
+                            <TableHead
                                 className="text-right font-bold cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("neto")}
                             >
@@ -498,7 +611,7 @@ export default function RentalsPage() {
                                     )}
                                 </div>
                             </TableHead>
-                            <TableHead 
+                            <TableHead
                                 className="cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("peticion")}
                             >
@@ -511,7 +624,7 @@ export default function RentalsPage() {
                                     )}
                                 </div>
                             </TableHead>
-                            <TableHead 
+                            <TableHead
                                 className="cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("antelacion")}
                             >
@@ -524,7 +637,7 @@ export default function RentalsPage() {
                                     )}
                                 </div>
                             </TableHead>
-                            <TableHead 
+                            <TableHead
                                 className="cursor-pointer hover:bg-muted/50 select-none"
                                 onClick={() => handleSort("comentarios")}
                             >
@@ -548,28 +661,29 @@ export default function RentalsPage() {
                             // Marcar bruto si entrada es pasada, hoy o queda 1 día (mañana)
                             const shouldHighlightBruto = showZeroPrice && entryDate && entryDate.getTime() <= tomorrow.getTime();
                             return (
-                            <TableRow key={r.id}>
-                                <TableCell>{r.viviendas?.nombre}</TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-2">
-                                        <PlatformLogo platform={r.plataformas?.nombre} className="h-4 w-4" />
-                                        <span className="hidden sm:inline">{r.plataformas?.nombre}</span>
-                                    </div>
-                                </TableCell>
-                                <TableCell>{format(parseISO(r.fecha_entrada), "dd MMM yyyy", { locale: es })}</TableCell>
-                                <TableCell>{format(parseISO(r.fecha_salida), "dd MMM yyyy", { locale: es })}</TableCell>
-                                <TableCell>{r.noches}</TableCell>
-                                <TableCell className={`text-right ${shouldHighlightBruto ? "bg-amber-100 dark:bg-amber-900/40" : ""}`}>{Number(r.precio_bruto).toFixed(2)}€</TableCell>
-                                <TableCell className="text-right">{Number(r.comision_valor).toFixed(2)}€</TableCell>
-                                <TableCell className="text-right font-bold text-emerald-600">{Number(r.precio_neto).toFixed(2)}€</TableCell>
-                                <TableCell>{r.fecha_peticion ? format(parseISO(r.fecha_peticion), "dd/MM/yyyy") : "-"}</TableCell>
-                                <TableCell>{r.dias_antelacion != null ? `${r.dias_antelacion}d` : "-"}</TableCell>
-                                <TableCell className="max-w-[150px] truncate" title={r.comentarios}>{r.comentarios}</TableCell>
-                                <TableCell className="flex gap-2">
-                                    <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4 text-blue-500" /></Button>
-                                    <Button variant="ghost" size="icon" onClick={() => deleteRental(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                </TableCell>
-                            </TableRow>
+                                <TableRow key={r.id}>
+                                    <TableCell>{r.viviendas?.nombre}</TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <PlatformLogo platform={r.plataformas?.nombre} className="h-4 w-4" />
+                                            <span className="hidden sm:inline">{r.plataformas?.nombre}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>{format(parseISO(r.fecha_entrada), "dd MMM yyyy", { locale: es })}</TableCell>
+                                    <TableCell>{format(parseISO(r.fecha_salida), "dd MMM yyyy", { locale: es })}</TableCell>
+                                    <TableCell>{r.noches}</TableCell>
+                                    <TableCell className={`text-right ${shouldHighlightBruto ? "bg-amber-100 dark:bg-amber-900/40" : ""}`}>{Number(r.precio_bruto).toFixed(2)}€</TableCell>
+                                    <TableCell className="text-right">{Number(r.comision_valor).toFixed(2)}€</TableCell>
+                                    <TableCell className="text-right font-bold text-emerald-600">{Number(r.precio_neto).toFixed(2)}€</TableCell>
+                                    <TableCell>{r.fecha_peticion ? format(parseISO(r.fecha_peticion), "dd/MM/yyyy") : "-"}</TableCell>
+                                    <TableCell>{r.dias_antelacion != null ? `${r.dias_antelacion}d` : "-"}</TableCell>
+                                    <TableCell className="max-w-[150px] truncate" title={r.comentarios}>{r.comentarios}</TableCell>
+                                    <TableCell className="flex gap-2">
+                                        <Button variant="ghost" size="icon" onClick={() => openReceiptModal(r)} title="Generar Recibo"><FileText className="h-4 w-4 text-emerald-600" /></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4 text-blue-500" /></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => deleteRental(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                    </TableCell>
+                                </TableRow>
                             );
                         })}
                         {filteredRentals.length === 0 && (
@@ -582,6 +696,64 @@ export default function RentalsPage() {
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Receipt Modal */}
+            <Dialog open={isReceiptModalOpen} onOpenChange={setIsReceiptModalOpen}>
+                <DialogContent className="sm:max-w-[450px]">
+                    <DialogHeader>
+                        <DialogTitle>Generar Recibo de Pago</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="c-name">Nombre del Cliente</Label>
+                            <Input
+                                id="c-name"
+                                placeholder="JUAN PEREZ GARCIA"
+                                value={clientData.nombre}
+                                onChange={e => setClientData({ ...clientData, nombre: e.target.value })}
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="c-dni">DNI / NIF</Label>
+                            <Input
+                                id="c-dni"
+                                placeholder="12345678X"
+                                value={clientData.dni}
+                                onChange={e => setClientData({ ...clientData, dni: e.target.value })}
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="c-dir">Dirección</Label>
+                            <Input
+                                id="c-dir"
+                                placeholder="CALLE MAYOR 1, MADRID"
+                                value={clientData.direccion}
+                                onChange={e => setClientData({ ...clientData, direccion: e.target.value })}
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="c-date">Fecha del Recibo</Label>
+                            <Input
+                                id="c-date"
+                                type="date"
+                                value={clientData.fecha_recibo}
+                                onChange={e => setClientData({ ...clientData, fecha_recibo: e.target.value })}
+                            />
+                        </div>
+                        <Card className="bg-slate-50 border-none shadow-none text-xs text-slate-500 p-3 italic">
+                            Se generará un recibo por el importe bruto de {activeRentalForReceipt?.precio_bruto.toFixed(2)}€
+                            para la estancia en {activeRentalForReceipt?.viviendas?.nombre}.
+                        </Card>
+                    </div>
+                    <Button
+                        onClick={generatePDF}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700"
+                        disabled={!clientData.nombre || !clientData.dni}
+                    >
+                        Descargar PDF
+                    </Button>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
