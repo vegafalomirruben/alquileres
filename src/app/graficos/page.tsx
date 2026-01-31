@@ -96,7 +96,7 @@ export default function ChartsPage() {
                                                 boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
                                                 padding: '12px'
                                             }}
-                                            formatter={(value: number) => [`${value.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`, "Ingreso Neto"]}
+                                            formatter={(value: any) => [`${Number(value).toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`, "Ingreso Neto"]}
                                             labelStyle={{ fontWeight: 'bold', marginBottom: '4px', color: '#1e293b' }}
                                         />
                                         <Bar
