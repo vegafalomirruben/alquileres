@@ -2,7 +2,7 @@ import { supabase } from "./supabase";
 import ICAL from "ical.js";
 import { differenceInDays } from "date-fns";
 
-export type CalendarEvent = {
+export interface CalendarEvent {
     id: string;
     title: string;
     start: Date;
@@ -12,7 +12,7 @@ export type CalendarEvent = {
     plataforma_id?: string;
     original_price?: number;
     created?: Date;
-};
+}
 
 export async function getUpcomingEvents(): Promise<{ events: CalendarEvent[], logs: string[], viviendas: any[] }> {
     const logs: string[] = [];
@@ -59,7 +59,6 @@ export async function getUpcomingEvents(): Promise<{ events: CalendarEvent[], lo
     if (vError) {
         log(`Error fetching viviendas from DB: ${vError.message}`);
     }
-
     log(`Query returned ${viviendas?.length || 0} total properties from DB`);
 
     const icalEvents: CalendarEvent[] = [];
@@ -206,7 +205,3 @@ async function fetchAndParseIcal(url: string, source: "airbnb" | "booking", vivi
     }
     return { events, logs };
 }
-
-
-
-

@@ -22,6 +22,8 @@ type Event = {
     vivienda: string;
     source: "airbnb" | "booking" | "manual";
     plataforma_id?: string;
+    original_price?: number;
+    created?: Date;
 };
 
 export default function CalendarPage() {
@@ -31,7 +33,7 @@ export default function CalendarPage() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [loading, setLoading] = useState(true);
     const [showLogs, setShowLogs] = useState(false);
-    const [viewMode, setViewMode] = useState<"bookings" | "availability">("bookings");
+    const [viewMode, setViewMode] = useState<"bookings" | "availability" | "annual">("bookings");
     const [plataformas, setPlataformas] = useState<any[]>([]);
 
     // Booking Dialog state
@@ -166,6 +168,14 @@ export default function CalendarPage() {
                         >
                             Disponibles
                         </Button>
+                        <Button
+                            variant={viewMode === "annual" ? "default" : "ghost"}
+                            size="sm"
+                            className="h-7 sm:h-8 flex-1 xs:flex-initial text-[10px] sm:text-xs"
+                            onClick={() => setViewMode("annual")}
+                        >
+                            Anual
+                        </Button>
                     </div>
                     <Button
                         variant="outline"
@@ -191,6 +201,55 @@ export default function CalendarPage() {
                         <div className="h-[600px] flex items-center justify-center">
                             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                         </div>
+                    ) : viewMode === "annual" ? (
+                        <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {Array.from({ length: 12 }).map((_, monthIndex) => {
+                                const monthDate = startOfMonth(new Date(currentDate.getFullYear(), monthIndex, 1));
+                                const monthDays = eachDayOfInterval({
+                                    start: startOfWeek(startOfMonth(monthDate), { weekStartsOn: 1 }),
+                                    end: endOfWeek(endOfMonth(monthDate), { weekStartsOn: 1 })
+                                });
+
+                                return (
+                                    <div key={monthIndex} className="space-y-2 border rounded-lg p-3 bg-white shadow-sm">
+                                        <h3 className="text-center font-bold capitalize text-sm border-b pb-1 mb-2 text-slate-700">
+                                            {format(monthDate, "MMMM", { locale: es })}
+                                        </h3>
+                                        <div className="grid grid-cols-7 text-center text-[9px] font-medium text-slate-400 mb-1">
+                                            {["L", "M", "X", "J", "V", "S", "D"].map(d => <div key={d}>{d}</div>)}
+                                        </div>
+                                        <div className="grid grid-cols-7 gap-0.5">
+                                            {monthDays.map((d, i) => {
+                                                const dayEvents = getEventsForDay(d);
+                                                const isCurrentMonth = isSameMonth(d, monthDate);
+
+                                                let textColor = "text-emerald-500 font-medium"; // Default no reservation
+
+                                                if (dayEvents.length > 0) {
+                                                    const firstEvent = dayEvents[0];
+                                                    if (firstEvent.source === "airbnb") textColor = "text-rose-500 font-bold";
+                                                    else if (firstEvent.source === "booking") textColor = "text-blue-500 font-bold";
+                                                    else textColor = "text-amber-500 font-bold";
+                                                }
+
+                                                return (
+                                                    <div
+                                                        key={i}
+                                                        className={`h-6 flex items-center justify-center text-[10px] rounded-sm
+                                                            ${!isCurrentMonth ? "opacity-20 pointer-events-none" : "hover:bg-slate-50 cursor-pointer"}
+                                                            ${textColor}
+                                                        `}
+                                                        onClick={() => isCurrentMonth && openBookingDialog("", d)}
+                                                    >
+                                                        {format(d, "d")}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     ) : (
                         <div className="grid grid-cols-7 border-b w-full">
                             {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map(day => (
@@ -205,9 +264,6 @@ export default function CalendarPage() {
                                 const isToday = isSameDay(day, new Date());
 
                                 // Calculate availability
-                                // Case 1: All properties that are NOT booked (previous logic) -> we keep this as a set of IDs for references if needed
-                                const bookedViviendasNames = new Set(dayEvents.map(e => e.vivienda));
-
                                 // Case 2: Specific properties marked as 'Libre' (new logic)
                                 const explicitLibreViviendas = dayEvents.filter(ev => {
                                     if (ev.source !== "manual" || !ev.plataforma_id) return false;
@@ -253,7 +309,7 @@ export default function CalendarPage() {
                                                     >
                                                         <div className="flex items-center gap-1 leading-tight">
                                                             <PlatformLogo platform={ev.source} className="h-2.5 w-2.5 shrink-0" />
-                                                            <span className="font-semibold truncate">{ev.vivienda}</span>
+                                                            <span className="font-semibold truncate">Cód. {ev.vivienda}</span>
                                                         </div>
                                                         {isSameDay(parseISO(ev.start), day) && <span className="opacity-75 block text-[7px] sm:text-[8px] leading-none">In</span>}
                                                         {isSameDay(parseISO(ev.end), day) && <span className="opacity-75 block text-[7px] sm:text-[8px] leading-none">Out</span>}
