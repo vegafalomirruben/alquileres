@@ -156,7 +156,7 @@ export default function RentalsPage() {
 
     // Cálculos automáticos
     useEffect(() => {
-        if (formData.fecha_entrada && formData.fecha_salida && formData.precio_bruto > 0) {
+        if (formData.fecha_entrada && formData.fecha_salida && formData.precio_bruto >= 0) {
             const entrada = parseISO(formData.fecha_entrada);
             const salida = parseISO(formData.fecha_salida);
             const noches = differenceInDays(salida, entrada);
@@ -196,26 +196,33 @@ export default function RentalsPage() {
     }, [formData.fecha_entrada, formData.fecha_peticion]);
 
     async function handleSubmit() {
-        if (!formData.vivienda_id || !formData.plataforma_id || !formData.fecha_entrada || !formData.fecha_salida || formData.precio_bruto <= 0) {
-            return toast.error("Por favor rellena todos los campos obligatorios");
+        if (!formData.vivienda_id || !formData.plataforma_id || !formData.fecha_entrada || !formData.fecha_salida || formData.precio_bruto < 0) {
+            return toast.error("Por favor rellena todos los campos obligatorios (el precio debe ser mayor o igual a 0)");
         }
 
-        let error;
+        // Limpiar datos para evitar errores de tipo en la base de datos (p.ej. strings vacíos en fechas)
+        const dataToSave = {
+            ...formData,
+            fecha_peticion: formData.fecha_peticion || null,
+            comentarios: formData.comentarios || null,
+        };
+
+        let result;
         if (editingId) {
-            const { error: updateError } = await supabase
+            result = await supabase
                 .from("alquileres")
-                .update(formData)
+                .update(dataToSave)
                 .eq("id", editingId);
-            error = updateError;
         } else {
-            const { error: insertError } = await supabase
+            result = await supabase
                 .from("alquileres")
-                .insert([formData]);
-            error = insertError;
+                .insert([dataToSave]);
         }
 
-        if (error) toast.error("Error al guardar el alquiler");
-        else {
+        if (result.error) {
+            console.error("Error saving rental:", result.error);
+            toast.error(`Error al guardar: ${result.error.message}`);
+        } else {
             toast.success(editingId ? "Alquiler actualizado" : "Alquiler registrado con éxito");
             setIsModalOpen(false);
             resetForm();
