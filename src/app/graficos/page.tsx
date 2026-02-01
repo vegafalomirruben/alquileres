@@ -268,7 +268,12 @@ export default function ChartsPage() {
                                     <Tooltip
                                         cursor={{ fill: '#f1f5f9' }}
                                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                        formatter={(val: number) => [`${val.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`, ""]}
+                                        formatter={(val: any) => [
+                                            typeof val === 'number'
+                                                ? `${val.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`
+                                                : val,
+                                            ""
+                                        ]}
                                     />
                                     <Legend verticalAlign="top" height={40} />
                                     {selectedMetrics.map((mId, index) => {
