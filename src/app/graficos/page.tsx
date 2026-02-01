@@ -41,6 +41,7 @@ const MultiToggle = ({ options, selected, onToggle, label, icon: Icon }: any) =>
 
 export default function ChartsPage() {
     const [rentals, setRentals] = useState<any[]>([]);
+    const [expenses, setExpenses] = useState<any[]>([]);
     const [viviendas, setViviendas] = useState<any[]>([]);
     const [plataformas, setPlataformas] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -57,10 +58,12 @@ export default function ChartsPage() {
             setLoading(true);
             const [
                 { data: rData },
+                { data: eData },
                 { data: vData },
                 { data: pData }
             ] = await Promise.all([
                 supabase.from("alquileres").select("*, viviendas(nombre), plataformas(nombre)"),
+                supabase.from("gastos").select("*"),
                 supabase.from("viviendas").select("*"),
                 supabase.from("plataformas").select("*")
             ]);
@@ -71,6 +74,7 @@ export default function ChartsPage() {
                 const years = Array.from(new Set(rData.map(r => r.fecha_entrada ? new Date(r.fecha_entrada).getFullYear().toString() : null).filter(Boolean)));
                 setSelectedYears(years as string[]);
             }
+            if (eData) setExpenses(eData);
             if (vData) {
                 setViviendas(vData);
                 setSelectedViviendaIds(vData.map(v => v.id));
@@ -95,61 +99,85 @@ export default function ChartsPage() {
         { id: "precio_neto", name: "Ingreso Neto", color: "#2563eb" },
         { id: "precio_bruto", name: "Ingreso Bruto", color: "#10b981" },
         { id: "comision_valor", name: "Comisión", color: "#f59e0b" },
+        { id: "importe_gastos", name: "Gastos", color: "#ef4444" },
+        { id: "beneficio_real", name: "Beneficio Real", color: "#065f46" },
         { id: "noches", name: "Noches", color: "#8b5cf6" },
         { id: "precio_medio_diario", name: "Precio Diario", color: "#ec4899" }
     ];
 
     const chartData = useMemo(() => {
-        let filtered = rentals.filter(r => {
-            const year = r.fecha_entrada ? new Date(r.fecha_entrada).getFullYear().toString() : null;
-            return (
-                selectedYears.includes(year!) &&
-                selectedViviendaIds.includes(r.vivienda_id) &&
-                selectedPlataformaIds.includes(r.plataforma_id)
-            );
-        });
+        const grouped: any = {};
 
-        const grouped = filtered.reduce((acc: any, curr: any) => {
+        // Process Rentals
+        rentals.forEach(curr => {
+            const year = curr.fecha_entrada ? new Date(curr.fecha_entrada).getFullYear().toString() : null;
+            if (!selectedYears.includes(year!) || !selectedViviendaIds.includes(curr.vivienda_id) || !selectedPlataformaIds.includes(curr.plataforma_id)) return;
+
             let key = "Desconocido";
             let sortVal = curr.fecha_entrada || "";
 
-            if (groupBy === "year") {
-                key = curr.fecha_entrada ? new Date(curr.fecha_entrada).getFullYear().toString() : "Sin fecha";
-            } else if (groupBy === "month") {
+            if (groupBy === "year") key = year || "Sin fecha";
+            else if (groupBy === "month") {
                 if (curr.fecha_entrada) {
                     const date = parseISO(curr.fecha_entrada);
                     key = format(date, "MMM yy", { locale: es });
                     key = key.charAt(0).toUpperCase() + key.slice(1);
                 }
-            } else if (groupBy === "platform") {
-                key = curr.plataformas?.nombre || "Sin plataforma";
-            } else if (groupBy === "property") {
-                key = curr.viviendas?.nombre || "Sin vivienda";
+            } else if (groupBy === "platform") key = curr.plataformas?.nombre || "Sin plataforma";
+            else if (groupBy === "property") key = curr.viviendas?.nombre || "Sin vivienda";
+
+            if (!grouped[key]) {
+                grouped[key] = { label: key, sortKey: sortVal };
+                metricsOptions.forEach(m => grouped[key][m.id] = 0);
+            }
+            grouped[key].precio_neto += Number(curr.precio_neto) || 0;
+            grouped[key].precio_bruto += Number(curr.precio_bruto) || 0;
+            grouped[key].comision_valor += Number(curr.comision_valor) || 0;
+            grouped[key].noches += Number(curr.noches) || 0;
+            grouped[key].precio_medio_diario += Number(curr.precio_medio_diario) || 0;
+        });
+
+        // Process Expenses
+        expenses.forEach(curr => {
+            const year = curr.fecha ? new Date(curr.fecha).getFullYear().toString() : null;
+            if (!selectedYears.includes(year!) || !selectedViviendaIds.includes(curr.vivienda_id)) return;
+
+            let key = "Desconocido";
+            let sortVal = curr.fecha || "";
+
+            if (groupBy === "year") key = year || "Sin fecha";
+            else if (groupBy === "month") {
+                if (curr.fecha) {
+                    const date = parseISO(curr.fecha);
+                    key = format(date, "MMM yy", { locale: es });
+                    key = key.charAt(0).toUpperCase() + key.slice(1);
+                }
+            } else if (groupBy === "platform") key = "Gastos";
+            else if (groupBy === "property") {
+                const viv = viviendas.find(v => v.id === curr.vivienda_id);
+                key = viv?.nombre || "Sin vivienda";
             }
 
-            if (!acc[key]) {
-                acc[key] = { label: key, sortKey: sortVal };
-                metricsOptions.forEach(m => acc[key][m.id] = 0);
+            if (!grouped[key]) {
+                grouped[key] = { label: key, sortKey: sortVal };
+                metricsOptions.forEach(m => grouped[key][m.id] = 0);
             }
+            grouped[key].importe_gastos += Number(curr.importe) || 0;
+        });
 
-            metricsOptions.forEach(m => {
-                acc[key][m.id] += Number(curr[m.id]) || 0;
-            });
+        const result = Object.values(grouped).map((item: any) => {
+            item.beneficio_real = item.precio_neto - item.importe_gastos;
+            return item;
+        });
 
-            return acc;
-        }, {});
-
-        const result = Object.values(grouped);
         if (groupBy === "month" || groupBy === "year") {
             result.sort((a: any, b: any) => a.sortKey.localeCompare(b.sortKey));
         } else {
-            // Sort by first selected metric descending
             const firstMetric = selectedMetrics[0] || "precio_neto";
             result.sort((a: any, b: any) => b[firstMetric] - a[firstMetric]);
         }
-
         return result;
-    }, [rentals, groupBy, selectedMetrics, selectedYears, selectedViviendaIds, selectedPlataformaIds]);
+    }, [rentals, expenses, viviendas, plataformas, groupBy, selectedMetrics, selectedYears, selectedViviendaIds, selectedPlataformaIds]);
 
     const handleToggle = (id: string, state: string[], setState: any) => {
         if (state.includes(id)) {
