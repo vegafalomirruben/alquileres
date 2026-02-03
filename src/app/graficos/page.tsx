@@ -112,7 +112,7 @@ export default function ChartsPage() {
     const availableYears = useMemo(() => {
         const years = rentals
             .map(r => r.fecha_entrada ? new Date(r.fecha_entrada).getFullYear().toString() : null)
-            .filter(Boolean);
+            .filter((y): y is string => y !== null);
         return Array.from(new Set(years)).sort().reverse().map(y => ({ id: y, name: y }));
     }, [rentals]);
 
