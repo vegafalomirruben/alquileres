@@ -11,17 +11,38 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
 // Helper for multi-select pills
-const MultiToggle = ({ options, selected, onToggle, label, icon: Icon }: any) => (
+const MultiToggle = ({ options, selected, onToggle, onSelectAll, onDeselectAll, label, icon: Icon }: any) => (
     <div className="space-y-2">
-        <Label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            {Icon && <Icon className="w-3 h-3" />} {label}
-        </Label>
+        <div className="flex items-center justify-between mb-1">
+            <Label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                {Icon && <Icon className="w-3 h-3" />} {label}
+            </Label>
+            {options.length > 1 && (
+                <div className="flex gap-3">
+                    <button
+                        type="button"
+                        onClick={onSelectAll}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition-colors uppercase tracking-tight"
+                    >
+                        Todo
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onDeselectAll}
+                        className="text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-tight"
+                    >
+                        Nada
+                    </button>
+                </div>
+            )}
+        </div>
         <div className="flex flex-wrap gap-2">
             {options.map((opt: any) => {
                 const isSelected = selected.includes(opt.id);
                 return (
                     <button
                         key={opt.id}
+                        type="button"
                         onClick={() => onToggle(opt.id)}
                         className={cn(
                             "px-3 py-1.5 rounded-full text-xs font-medium transition-all border flex items-center gap-1.5",
@@ -213,6 +234,8 @@ export default function ChartsPage() {
                                 options={metricsOptions}
                                 selected={selectedMetrics}
                                 onToggle={(id: string) => handleToggle(id, selectedMetrics, setSelectedMetrics)}
+                                onSelectAll={() => setSelectedMetrics(metricsOptions.map(m => m.id))}
+                                onDeselectAll={() => setSelectedMetrics([metricsOptions[0].id])}
                             />
 
                             <div className="space-y-2">
@@ -248,6 +271,8 @@ export default function ChartsPage() {
                                 options={availableYears}
                                 selected={selectedYears}
                                 onToggle={(id: string) => handleToggle(id, selectedYears, setSelectedYears)}
+                                onSelectAll={() => setSelectedYears(availableYears.map(y => y.id))}
+                                onDeselectAll={() => setSelectedYears([])}
                             />
                             <MultiToggle
                                 label="Viviendas"
@@ -255,6 +280,8 @@ export default function ChartsPage() {
                                 options={viviendas.map(v => ({ id: v.id, name: v.nombre }))}
                                 selected={selectedViviendaIds}
                                 onToggle={(id: string) => handleToggle(id, selectedViviendaIds, setSelectedViviendaIds)}
+                                onSelectAll={() => setSelectedViviendaIds(viviendas.map(v => v.id))}
+                                onDeselectAll={() => setSelectedViviendaIds([])}
                             />
                             <MultiToggle
                                 label="Plataformas"
@@ -262,6 +289,8 @@ export default function ChartsPage() {
                                 options={plataformas.map(p => ({ id: p.id, name: p.nombre }))}
                                 selected={selectedPlataformaIds}
                                 onToggle={(id: string) => handleToggle(id, selectedPlataformaIds, setSelectedPlataformaIds)}
+                                onSelectAll={() => setSelectedPlataformaIds(plataformas.map(p => p.id))}
+                                onDeselectAll={() => setSelectedPlataformaIds([])}
                             />
                         </div>
                     </div>
