@@ -25,6 +25,7 @@ export default function TramitesPage() {
         neto: number;
         comisiones: number;
         nochesTotales: number;
+        porcentajeOcupacion: number;
         gastosPorCategoria: { nombre: string; total: number }[];
     } | null>(null);
 
@@ -156,7 +157,18 @@ export default function TramitesPage() {
 
             if (cError) throw cError;
 
-            // 3. Process Data
+            // 3. Fetch Total Housing Units for occupancy calculation
+            const { count: viviendasCount, error: vError } = await supabase
+                .from("viviendas")
+                .select("*", { count: 'exact', head: true });
+
+            if (vError) throw vError;
+
+            // 4. Process Data
+            const numViviendas = viviendasCount || 1;
+            const isLeapYear = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+            const diasAño = isLeapYear(Number(year)) ? 366 : 365;
+            const capacidadTotalNoches = numViviendas * diasAño;
             const totalBruto = rentals?.reduce((acc, r) => acc + (Number(r.precio_bruto) || 0), 0) || 0;
             const totalNeto = rentals?.reduce((acc, r) => acc + (Number(r.precio_neto) || 0), 0) || 0;
             const totalComisiones = rentals?.reduce((acc, r) => acc + (Number(r.comision_valor) || 0), 0) || 0;
@@ -183,6 +195,7 @@ export default function TramitesPage() {
                 neto: totalNeto,
                 comisiones: totalComisiones,
                 nochesTotales: totalNoches,
+                porcentajeOcupacion: (totalNoches / capacidadTotalNoches) * 100,
                 gastosPorCategoria: gastosList
             });
 
@@ -348,11 +361,22 @@ export default function TramitesPage() {
                                 </div>
                             </div>
                             <div className="flex gap-4">
-                                <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-md">
-                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-[0.2em] mb-1">Noches Ocupadas</p>
-                                    <p className="text-3xl font-black text-blue-400 font-mono tracking-tighter">
-                                        {haciendaData.nochesTotales}
-                                    </p>
+                                <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-md min-w-[140px]">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-[0.2em] mb-1">Ocupación Anual</p>
+                                    <div className="flex items-baseline gap-2">
+                                        <p className="text-3xl font-black text-blue-400 font-mono tracking-tighter">
+                                            {haciendaData.nochesTotales}
+                                        </p>
+                                        <p className="text-sm font-bold text-blue-300 opacity-80">
+                                            {haciendaData.porcentajeOcupacion.toFixed(1)}%
+                                        </p>
+                                    </div>
+                                    <div className="w-full bg-white/5 h-1 rounded-full mt-2 overflow-hidden">
+                                        <div
+                                            className="bg-blue-500 h-full rounded-full transition-all duration-1000"
+                                            style={{ width: `${Math.min(100, haciendaData.porcentajeOcupacion)}%` }}
+                                        />
+                                    </div>
                                 </div>
                                 <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-md">
                                     <p className="text-[10px] text-slate-400 uppercase font-bold tracking-[0.2em] mb-1">Resultado Bruto ANUAL</p>
