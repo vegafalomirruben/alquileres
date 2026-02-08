@@ -7,15 +7,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { FileDown, Building, CheckCircle2 } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { FileDown, Building, CheckCircle2, Landmark, PieChart, Table as TableIcon, Filter, Calendar } from "lucide-react";
+import { format, parseISO, differenceInDays } from "date-fns";
 import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function TramitesPage() {
     const [year, setYear] = useState(new Date().getFullYear().toString());
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isGeneratingHacienda, setIsGeneratingHacienda] = useState(false);
     const [plataformas, setPlataformas] = useState<any[]>([]);
     const [selectedPlatIds, setSelectedPlatIds] = useState<string[]>([]);
+
+    // Hacienda state
+    const [haciendaData, setHaciendaData] = useState<{
+        bruto: number;
+        neto: number;
+        comisiones: number;
+        nochesTotales: number;
+        gastosPorCategoria: { nombre: string; total: number }[];
+    } | null>(null);
 
     useEffect(() => {
         fetchPlataformas();
@@ -106,92 +117,321 @@ export default function TramitesPage() {
         }
     }
 
+    async function generateHaciendaSummary() {
+        if (!year || isNaN(Number(year))) {
+            return toast.error("Por favor, introduce un año válido.");
+        }
+
+        if (selectedPlatIds.length === 0) {
+            return toast.error("Selecciona al menos una plataforma.");
+        }
+
+        setIsGeneratingHacienda(true);
+        try {
+            const startDate = `${year}-01-01`;
+            const endDate = `${year}-12-31`;
+
+            // 1. Fetch Rentals
+            const { data: rentals, error: rError } = await supabase
+                .from("alquileres")
+                .select("precio_bruto, precio_neto, comision_valor, fecha_entrada, fecha_salida")
+                .gte("fecha_entrada", startDate)
+                .lte("fecha_entrada", endDate)
+                .in("plataforma_id", selectedPlatIds);
+
+            if (rError) throw rError;
+
+            // 2. Fetch Expenses and Categories
+            const { data: expenses, error: eError } = await supabase
+                .from("gastos")
+                .select("importe, categoria_id")
+                .gte("fecha", startDate)
+                .lte("fecha", endDate);
+
+            if (eError) throw eError;
+
+            const { data: categories, error: cError } = await supabase
+                .from("categorias_gastos")
+                .select("id, nombre");
+
+            if (cError) throw cError;
+
+            // 3. Process Data
+            const totalBruto = rentals?.reduce((acc, r) => acc + (Number(r.precio_bruto) || 0), 0) || 0;
+            const totalNeto = rentals?.reduce((acc, r) => acc + (Number(r.precio_neto) || 0), 0) || 0;
+            const totalComisiones = rentals?.reduce((acc, r) => acc + (Number(r.comision_valor) || 0), 0) || 0;
+            const totalNoches = rentals?.reduce((acc, r) => {
+                const start = parseISO(r.fecha_entrada);
+                const end = parseISO(r.fecha_salida);
+                return acc + Math.max(0, differenceInDays(end, start));
+            }, 0) || 0;
+
+            const categorizedExpenses: { [key: string]: number } = {};
+            expenses?.forEach(exp => {
+                const cat = categories?.find(c => c.id === exp.categoria_id);
+                const catName = cat ? cat.nombre : "Otros / Sin categoría";
+                categorizedExpenses[catName] = (categorizedExpenses[catName] || 0) + (Number(exp.importe) || 0);
+            });
+
+            const gastosList = Object.keys(categorizedExpenses).map(name => ({
+                nombre: name,
+                total: categorizedExpenses[name]
+            })).sort((a, b) => b.total - a.total);
+
+            setHaciendaData({
+                bruto: totalBruto,
+                neto: totalNeto,
+                comisiones: totalComisiones,
+                nochesTotales: totalNoches,
+                gastosPorCategoria: gastosList
+            });
+
+            toast.success("Resumen de Hacienda generado.");
+        } catch (error: any) {
+            console.error("Error generating Hacienda summary:", error);
+            toast.error("Error al generar resumen: " + error.message);
+        } finally {
+            setIsGeneratingHacienda(false);
+        }
+    }
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col gap-1">
-                <h1 className="text-3xl font-bold tracking-tight">Trámites</h1>
-                <p className="text-muted-foreground italic">Automatización de exportaciones para organismos oficiales.</p>
+                <h1 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">Trámites</h1>
+                <p className="text-muted-foreground font-medium italic">Automatización de exportaciones y resúmenes para organismos oficiales.</p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <Card className="border-blue-100 shadow-lg hover:shadow-xl transition-all duration-300">
-                    <CardHeader className="bg-gradient-to-br from-blue-50 to-indigo-50/30 border-b border-blue-100/50 pb-6">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2 text-blue-600">
-                                <Building className="h-5 w-5" />
-                                <span className="text-xs font-bold uppercase tracking-widest">Propiedad</span>
-                            </div>
-                            <CheckCircle2 className="h-5 w-5 text-blue-500/50" />
+            {/* CONFIGURACIÓN GLOBAL */}
+            <Card className="border-slate-200 shadow-xl overflow-hidden bg-white/50 backdrop-blur-sm">
+                <CardHeader className="bg-slate-900 text-white pb-6 pt-6">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-blue-500 p-2 rounded-lg">
+                            <Filter className="h-5 w-5 text-white" />
                         </div>
-                        <CardTitle className="text-2xl font-black text-slate-800">Registradores</CardTitle>
-                        <CardDescription className="text-slate-600 font-medium">
-                            Genera el archivo CSV oficial para el registro de la propiedad.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-6 space-y-6">
+                        <div>
+                            <CardTitle className="text-xl font-bold">Configuración de Filtros</CardTitle>
+                            <CardDescription className="text-slate-400">Selecciona el periodo y las plataformas para tus trámites.</CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="pt-8">
+                    <div className="grid md:grid-cols-2 gap-8">
+                        {/* AÑO */}
                         <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-slate-800 font-bold mb-2">
+                                <Calendar className="h-5 w-5 text-blue-600" />
+                                <span>1. Periodo Contable</span>
+                            </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="year" className="text-sm font-bold text-slate-700">1. Año Fiscal</Label>
+                                <Label htmlFor="global-year" className="text-xs uppercase tracking-widest text-slate-500 font-bold">Año Fiscal</Label>
                                 <Input
-                                    id="year"
+                                    id="global-year"
                                     type="number"
                                     placeholder="Ej: 2024"
                                     value={year}
                                     onChange={(e) => setYear(e.target.value)}
-                                    className="text-xl font-bold bg-white border-blue-200 focus:border-blue-500 transition-colors"
+                                    className="text-2xl font-black h-14 border-2 border-slate-100 focus:border-blue-500 bg-white"
                                 />
-                            </div>
-
-                            <Separator className="bg-blue-100/50" />
-
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-sm font-bold text-slate-700">2. Plataformas</Label>
-                                    <button
-                                        onClick={toggleAll}
-                                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-tight"
-                                    >
-                                        {selectedPlatIds.length === plataformas.length ? "Desmarcar todos" : "Marcar todos"}
-                                    </button>
-                                </div>
-                                <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                                    {plataformas.map((plat) => (
-                                        <div
-                                            key={plat.id}
-                                            onClick={() => togglePlataforma(plat.id)}
-                                            className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedPlatIds.includes(plat.id)
-                                                    ? "bg-blue-50 border-blue-500 shadow-sm"
-                                                    : "bg-slate-50 border-transparent hover:border-slate-200"
-                                                }`}
-                                        >
-                                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedPlatIds.includes(plat.id)
-                                                    ? "bg-blue-600 border-blue-600"
-                                                    : "bg-white border-slate-300"
-                                                }`}>
-                                                {selectedPlatIds.includes(plat.id) && (
-                                                    <div className="w-2 h-2 bg-white rounded-full animate-in zoom-in-50 duration-300" />
-                                                )}
-                                            </div>
-                                            <span className={`text-sm font-semibold ${selectedPlatIds.includes(plat.id) ? "text-blue-900" : "text-slate-600"}`}>
-                                                {plat.nombre}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
                             </div>
                         </div>
 
+                        {/* PLATAFORMAS */}
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between gap-2 text-slate-800 font-bold mb-2">
+                                <div className="flex items-center gap-2">
+                                    <Building className="h-5 w-5 text-blue-600" />
+                                    <span>2. Selección de Plataformas</span>
+                                </div>
+                                <button
+                                    onClick={toggleAll}
+                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-tight bg-blue-50 px-3 py-1 rounded-full transition-colors"
+                                >
+                                    {selectedPlatIds.length === plataformas.length ? "Desmarcar todos" : "Marcar todos"}
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
+                                {plataformas.map((plat) => (
+                                    <div
+                                        key={plat.id}
+                                        onClick={() => togglePlataforma(plat.id)}
+                                        className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedPlatIds.includes(plat.id)
+                                            ? "bg-blue-50 border-blue-500 shadow-sm"
+                                            : "bg-white border-slate-100 hover:border-slate-200"
+                                            }`}
+                                    >
+                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedPlatIds.includes(plat.id)
+                                            ? "bg-blue-600 border-blue-600"
+                                            : "bg-white border-slate-200"
+                                            }`}>
+                                            {selectedPlatIds.includes(plat.id) && (
+                                                <div className="w-2 h-2 bg-white rounded-full animate-in zoom-in-50 duration-300" />
+                                            )}
+                                        </div>
+                                        <span className={`text-sm font-bold ${selectedPlatIds.includes(plat.id) ? "text-blue-900" : "text-slate-600"}`}>
+                                            {plat.nombre}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <div className="grid gap-6 md:grid-cols-2">
+                {/* REGISTRADORES CARD */}
+                <Card className="border-blue-100 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white pb-6">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="bg-white/20 p-2 rounded-lg">
+                                <Building className="h-6 w-6 text-white" />
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white/20 px-3 py-1 rounded-full">Propiedad</span>
+                        </div>
+                        <CardTitle className="text-2xl font-black">Registradores</CardTitle>
+                        <CardDescription className="text-blue-100 font-medium opacity-90">
+                            Exportación CSV oficial con formato Registradores.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6">
                         <Button
                             onClick={generateRegistradoresCSV}
-                            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold h-14 rounded-2xl shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold h-14 rounded-2xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
                             disabled={isGenerating}
                         >
                             <FileDown className="mr-3 h-6 w-6" />
-                            {isGenerating ? "Generando Archivo..." : "Generar y Descargar CSV"}
+                            {isGenerating ? "Generando..." : `Descargar CSV (${year})`}
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                {/* HACIENDA CARD */}
+                <Card className="border-emerald-100 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+                    <CardHeader className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white pb-6">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="bg-white/20 p-2 rounded-lg">
+                                <Landmark className="h-6 w-6 text-white" />
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white/20 px-3 py-1 rounded-full">Impuestos</span>
+                        </div>
+                        <CardTitle className="text-2xl font-black">Hacienda</CardTitle>
+                        <CardDescription className="text-emerald-50 font-medium opacity-90">
+                            Balances contables para declaración de beneficios.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <Button
+                            onClick={generateHaciendaSummary}
+                            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold h-14 rounded-2xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                            disabled={isGeneratingHacienda}
+                        >
+                            <TableIcon className="mr-3 h-6 w-6" />
+                            {isGeneratingHacienda ? "Analizando..." : `Ver Informe Fiscal (${year})`}
                         </Button>
                     </CardContent>
                 </Card>
             </div>
+
+            {/* RESULTS TABLE */}
+            {haciendaData && (
+                <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+                    <Card className="border-slate-200 overflow-hidden shadow-2xl">
+                        <div className="bg-slate-900 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-emerald-500 p-2 rounded-xl">
+                                    <PieChart className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-white text-xl font-black">Informe Fiscal Consolidado</CardTitle>
+                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Periodo {year} • {selectedPlatIds.length} Plataformas</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-md">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-[0.2em] mb-1">Noches Ocupadas</p>
+                                    <p className="text-3xl font-black text-blue-400 font-mono tracking-tighter">
+                                        {haciendaData.nochesTotales}
+                                    </p>
+                                </div>
+                                <div className="bg-white/10 p-4 rounded-2xl border border-white/10 backdrop-blur-md">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-[0.2em] mb-1">Resultado Bruto ANUAL</p>
+                                    <p className="text-3xl font-black text-emerald-400 font-mono tracking-tighter">
+                                        {haciendaData.bruto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <CardContent className="p-0">
+                            <div className="grid md:grid-cols-2">
+                                {/* Ingresos Section */}
+                                <div className="p-8 border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/30">
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-6 flex items-center gap-2">
+                                        <div className="w-1.5 h-6 bg-emerald-500 rounded-full" />
+                                        Módulo de Ingresos
+                                    </h3>
+                                    <Table>
+                                        <TableBody>
+                                            <TableRow className="border-transparent hover:bg-white transition-colors h-16">
+                                                <TableCell className="font-bold text-slate-700">Ingresos Brutos</TableCell>
+                                                <TableCell className="text-right font-black text-slate-900 text-lg tracking-tight">{haciendaData.bruto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                            </TableRow>
+                                            <TableRow className="border-transparent hover:bg-white transition-colors h-16">
+                                                <TableCell className="font-bold text-slate-500">Comisiones Plataformas</TableCell>
+                                                <TableCell className="text-right font-bold text-rose-500">-{haciendaData.comisiones.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                            </TableRow>
+                                            <TableRow className="bg-white font-bold border-t-2 border-slate-900 h-20">
+                                                <TableCell className="text-slate-900 text-base">Neto Cobrado</TableCell>
+                                                <TableCell className="text-right text-emerald-600 text-2xl font-black tracking-tighter">{haciendaData.neto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </div>
+
+                                {/* Gastos Section */}
+                                <div className="p-8 bg-white">
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-6 flex items-center gap-2">
+                                        <div className="w-1.5 h-6 bg-rose-500 rounded-full" />
+                                        Módulo de Gastos Deductibles
+                                    </h3>
+                                    <div className="max-h-[350px] overflow-y-auto custom-scrollbar border rounded-2xl">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="bg-slate-50 border-b">
+                                                    <TableHead className="text-[10px] font-black uppercase text-slate-500 px-6 h-12">Concepto / Categoría</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase text-slate-500 text-right px-6 h-12">Importe Final</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {haciendaData.gastosPorCategoria.length > 0 ? (
+                                                    haciendaData.gastosPorCategoria.map((gasto, idx) => (
+                                                        <TableRow key={idx} className="hover:bg-slate-50 border-slate-100 h-14">
+                                                            <TableCell className="text-sm font-bold text-slate-700 px-6 capitalize">{gasto.nombre}</TableCell>
+                                                            <TableCell className="text-right font-bold text-slate-900 px-6 font-mono">{gasto.total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                                        </TableRow>
+                                                    ))
+                                                ) : (
+                                                    <TableRow>
+                                                        <TableCell colSpan={2} className="text-center py-10 text-xs font-bold text-slate-400">Sin datos de gastos en este periodo.</TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                    {haciendaData.gastosPorCategoria.length > 0 && (
+                                        <div className="mt-6 flex justify-between items-center px-6 bg-rose-50 border border-rose-100 rounded-2xl h-20">
+                                            <span className="text-xs font-black text-rose-800 uppercase tracking-widest">SUMATORIO GASTOS</span>
+                                            <span className="text-2xl font-black text-rose-700 font-mono">
+                                                {haciendaData.gastosPorCategoria.reduce((acc, g) => acc + g.total, 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }
