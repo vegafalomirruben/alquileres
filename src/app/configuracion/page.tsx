@@ -16,7 +16,25 @@ export default function ConfigPage() {
     const [plataformas, setPlataformas] = useState<any[]>([]);
     const [categorias, setCategorias] = useState<any[]>([]);
 
-    const [newVivienda, setNewVivienda] = useState<{ nombre: string, direccion: string, ical_airbnb?: string, ical_booking?: string }>({ nombre: "", direccion: "", ical_airbnb: "", ical_booking: "" });
+    const [newVivienda, setNewVivienda] = useState<{
+        nombre: string,
+        direccion: string,
+        ical_airbnb?: string,
+        ical_booking?: string,
+        ref_catastral?: string,
+        licencia_turistica?: string,
+        nrua?: string,
+        cru?: string
+    }>({
+        nombre: "",
+        direccion: "",
+        ical_airbnb: "",
+        ical_booking: "",
+        ref_catastral: "",
+        licencia_turistica: "",
+        nrua: "",
+        cru: ""
+    });
     const [newPlataforma, setNewPlataforma] = useState({ nombre: "", comision_porcentaje: 0 });
     const [newCategoria, setNewCategoria] = useState({ nombre: "" });
 
@@ -67,13 +85,26 @@ export default function ConfigPage() {
             nombre: v.nombre,
             direccion: v.direccion || "",
             ical_airbnb: v.ical_airbnb || "",
-            ical_booking: v.ical_booking || ""
+            ical_booking: v.ical_booking || "",
+            ref_catastral: v.ref_catastral || "",
+            licencia_turistica: v.licencia_turistica || "",
+            nrua: v.nrua || "",
+            cru: v.cru || ""
         });
     }
 
     function cancelEditVivienda() {
         setEditingViviendaId(null);
-        setNewVivienda({ nombre: "", direccion: "", ical_airbnb: "", ical_booking: "" });
+        setNewVivienda({
+            nombre: "",
+            direccion: "",
+            ical_airbnb: "",
+            ical_booking: "",
+            ref_catastral: "",
+            licencia_turistica: "",
+            nrua: "",
+            cru: ""
+        });
     }
 
     // --- Plataformas ---
@@ -177,6 +208,24 @@ export default function ConfigPage() {
                                     <Input id="vivienda-dir" placeholder="Ej: Calle Mayor 123" value={newVivienda.direccion} onChange={e => setNewVivienda({ ...newVivienda, direccion: e.target.value })} />
                                 </div>
                             </div>
+                            <div className="grid grid-cols-4 gap-4">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-catastral">Ref. Catastral</Label>
+                                    <Input id="vivienda-catastral" placeholder="Referencia Catastral" value={newVivienda.ref_catastral} onChange={e => setNewVivienda({ ...newVivienda, ref_catastral: e.target.value })} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-licencia">Licencia Turística</Label>
+                                    <Input id="vivienda-licencia" placeholder="Licencia Turística" value={newVivienda.licencia_turistica} onChange={e => setNewVivienda({ ...newVivienda, licencia_turistica: e.target.value })} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-nrua">NRUA</Label>
+                                    <Input id="vivienda-nrua" placeholder="NRUA" value={newVivienda.nrua} onChange={e => setNewVivienda({ ...newVivienda, nrua: e.target.value })} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-cru">CRU</Label>
+                                    <Input id="vivienda-cru" placeholder="CRU (Cód. Registro)" value={newVivienda.cru} onChange={e => setNewVivienda({ ...newVivienda, cru: e.target.value })} />
+                                </div>
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label htmlFor="ical-airbnb" className="text-xs text-muted-foreground">Airbnb Calendar Link (iCal)</Label>
@@ -198,6 +247,10 @@ export default function ConfigPage() {
                             <TableRow>
                                 <TableHead>Nombre</TableHead>
                                 <TableHead>Dirección</TableHead>
+                                <TableHead>Ref. Catastral</TableHead>
+                                <TableHead>Licencia</TableHead>
+                                <TableHead>NRUA</TableHead>
+                                <TableHead>CRU</TableHead>
                                 <TableHead className="w-[100px]">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -206,6 +259,10 @@ export default function ConfigPage() {
                                 <TableRow key={v.id} className={editingViviendaId === v.id ? "bg-muted/50" : ""}>
                                     <TableCell className="font-medium">{v.nombre}</TableCell>
                                     <TableCell>{v.direccion}</TableCell>
+                                    <TableCell className="text-xs font-mono">{v.ref_catastral}</TableCell>
+                                    <TableCell className="text-xs">{v.licencia_turistica}</TableCell>
+                                    <TableCell className="text-xs">{v.nrua}</TableCell>
+                                    <TableCell className="text-xs">{v.cru}</TableCell>
                                     <TableCell className="flex gap-2">
                                         <Button variant="ghost" size="icon" onClick={() => editVivienda(v)}><Pencil className="h-4 w-4 text-blue-500" /></Button>
                                         <Button variant="ghost" size="icon" onClick={() => deleteItem("viviendas", v.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
