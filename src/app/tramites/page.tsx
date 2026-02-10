@@ -26,7 +26,12 @@ export default function TramitesPage() {
         comisiones: number;
         nochesTotales: number;
         porcentajeOcupacion: number;
-        gastosPorCategoria: { nombre: string; total: number }[];
+        gastosPorCategoria: {
+            nombre: string;
+            total: number;
+            deducible: number; // Based on occupancy % or 100% for specific cats
+            individual: number; // 50% of deducible
+        }[];
     } | null>(null);
 
     useEffect(() => {
@@ -178,6 +183,13 @@ export default function TramitesPage() {
                 return acc + Math.max(0, differenceInDays(end, start));
             }, 0) || 0;
 
+            const is100PercentDeductible = (name: string) => {
+                const n = name.toUpperCase();
+                return n.includes("LAVANDERÍA") || n.includes("LAVANDERIA") || n.includes("LIMPIEZA");
+            };
+
+            const occupationRatio = totalNoches / capacidadTotalNoches;
+
             const categorizedExpenses: { [key: string]: number } = {};
             expenses?.forEach(exp => {
                 const cat = categories?.find(c => c.id === exp.categoria_id);
@@ -185,10 +197,33 @@ export default function TramitesPage() {
                 categorizedExpenses[catName] = (categorizedExpenses[catName] || 0) + (Number(exp.importe) || 0);
             });
 
-            const gastosList = Object.keys(categorizedExpenses).map(name => ({
-                nombre: name,
-                total: categorizedExpenses[name]
-            })).sort((a, b) => b.total - a.total);
+            const gastosList = Object.keys(categorizedExpenses).map(name => {
+                const total = categorizedExpenses[name];
+                let deducible = 0;
+
+                if (is100PercentDeductible(name)) {
+                    deducible = total;
+                } else {
+                    deducible = total * occupationRatio;
+                }
+
+                return {
+                    nombre: name,
+                    total: total,
+                    deducible: deducible,
+                    individual: deducible / 2
+                };
+            }).sort((a, b) => b.total - a.total);
+
+            // Add commissions as a specific gasto line item for visual clarity in the table if desired
+            // although the user also sees it in the left module. 
+            // We'll add it to the list as it's 100% deductible too.
+            gastosList.push({
+                nombre: "Comisiones Plataformas",
+                total: totalComisiones,
+                deducible: totalComisiones,
+                individual: totalComisiones / 2
+            });
 
             setHaciendaData({
                 bruto: totalBruto,
@@ -422,32 +457,47 @@ export default function TramitesPage() {
                                         <Table>
                                             <TableHeader>
                                                 <TableRow className="bg-slate-50 border-b">
-                                                    <TableHead className="text-[10px] font-black uppercase text-slate-500 px-6 h-12">Concepto / Categoría</TableHead>
-                                                    <TableHead className="text-[10px] font-black uppercase text-slate-500 text-right px-6 h-12">Importe Final</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase text-slate-500 px-4 h-12">Concepto</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase text-slate-500 text-right px-4 h-12">Total</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase text-blue-600 text-right px-4 h-12">Deduc. ({haciendaData.porcentajeOcupacion.toFixed(1)}%)</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase text-emerald-600 text-right px-4 h-12">Indiv. (50%)</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
                                                 {haciendaData.gastosPorCategoria.length > 0 ? (
                                                     haciendaData.gastosPorCategoria.map((gasto, idx) => (
                                                         <TableRow key={idx} className="hover:bg-slate-50 border-slate-100 h-14">
-                                                            <TableCell className="text-sm font-bold text-slate-700 px-6 capitalize">{gasto.nombre}</TableCell>
-                                                            <TableCell className="text-right font-bold text-slate-900 px-6 font-mono">{gasto.total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                                            <TableCell className="text-xs font-bold text-slate-700 px-4 capitalize">{gasto.nombre}</TableCell>
+                                                            <TableCell className="text-right font-medium text-slate-400 px-4 text-xs">{gasto.total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                                            <TableCell className="text-right font-bold text-slate-900 px-4 text-xs bg-blue-50/30">{gasto.deducible.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                                            <TableCell className="text-right font-black text-emerald-600 px-4 text-sm bg-emerald-50/20">{gasto.individual.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
                                                         </TableRow>
                                                     ))
                                                 ) : (
                                                     <TableRow>
-                                                        <TableCell colSpan={2} className="text-center py-10 text-xs font-bold text-slate-400">Sin datos de gastos en este periodo.</TableCell>
+                                                        <TableCell colSpan={4} className="text-center py-10 text-xs font-bold text-slate-400">Sin datos de gastos en este periodo.</TableCell>
                                                     </TableRow>
                                                 )}
                                             </TableBody>
                                         </Table>
                                     </div>
                                     {haciendaData.gastosPorCategoria.length > 0 && (
-                                        <div className="mt-6 flex justify-between items-center px-6 bg-rose-50 border border-rose-100 rounded-2xl h-20">
-                                            <span className="text-xs font-black text-rose-800 uppercase tracking-widest">SUMATORIO GASTOS</span>
-                                            <span className="text-2xl font-black text-rose-700 font-mono">
-                                                {haciendaData.gastosPorCategoria.reduce((acc, g) => acc + g.total, 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                                            </span>
+                                        <div className="mt-6 flex flex-col gap-2">
+                                            <div className="flex justify-between items-center px-6 bg-slate-900 text-white rounded-2xl h-16">
+                                                <span className="text-[10px] font-black uppercase tracking-widest">TOTAL DEDUCIBLE (100%)</span>
+                                                <span className="text-xl font-black font-mono">
+                                                    {haciendaData.gastosPorCategoria.reduce((acc, g) => acc + g.deducible, 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center px-6 bg-emerald-600 text-white rounded-2xl h-20 shadow-lg shadow-emerald-200">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest opacity-80">MI PARTE (50%)</span>
+                                                    <span className="text-[9px] font-bold italic opacity-60">Deducible individual</span>
+                                                </div>
+                                                <span className="text-3xl font-black font-mono">
+                                                    {haciendaData.gastosPorCategoria.reduce((acc, g) => acc + g.individual, 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                                </span>
+                                            </div>
                                         </div>
                                     )}
                                 </div>

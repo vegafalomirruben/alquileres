@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, ReceiptEuro, Pencil, X, AlertTriangle, UploadCloud, FileSearch, Sparkles, Check } from "lucide-react";
+import { Plus, Trash2, ReceiptEuro, Pencil, X, AlertTriangle, UploadCloud, FileSearch, Sparkles, Check, ChevronDown, ChevronRight, CalendarDays } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -46,6 +46,72 @@ export default function ExpensesPage() {
 
     const [expenseToDelete, setExpenseToDelete] = useState<any | null>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+    const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+    const availableYears = useMemo(() => {
+        const years = new Set<string>();
+        expenses.forEach(e => {
+            const year = parseISO(e.fecha).getFullYear().toString();
+            years.add(year);
+        });
+        // Ensure current year is always an option if not present
+        years.add(new Date().getFullYear().toString());
+        return Array.from(years).sort((a, b) => b.localeCompare(a));
+    }, [expenses]);
+
+    const groupedExpenses = useMemo(() => {
+        let filtered = expenses;
+        if (selectedYear !== "all") {
+            filtered = expenses.filter(e => e.fecha.startsWith(selectedYear));
+        }
+
+        const result: any[] = [];
+        const processedIds = new Set<string>();
+
+        // Re-sorting filtered to ensure consistent grouping
+        const sorted = [...filtered].sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+        sorted.forEach(e => {
+            if (processedIds.has(e.id)) return;
+
+            if (e.es_anual) {
+                // Determine a unique key for the batch: created_at + categoria_id
+                // We also check for similar descriptions or same housing
+                const batch = sorted.filter(other =>
+                    other.es_anual &&
+                    other.created_at === e.created_at &&
+                    other.categoria_id === e.categoria_id &&
+                    other.vivienda_id === e.vivienda_id &&
+                    !processedIds.has(other.id)
+                );
+
+                if (batch.length > 1) {
+                    const total = batch.reduce((sum, item) => sum + Number(item.importe), 0);
+                    const groupId = `group-${e.created_at}-${e.categoria_id}-${e.vivienda_id}`;
+
+                    result.push({
+                        type: 'group',
+                        id: groupId,
+                        total,
+                        items: [...batch].sort((a, b) => a.fecha.localeCompare(b.fecha)),
+                        mainItem: e
+                    });
+
+                    batch.forEach(b => processedIds.add(b.id));
+                } else {
+                    result.push({ type: 'single', ...e });
+                    processedIds.add(e.id);
+                }
+            } else {
+                result.push({ type: 'single', ...e });
+                processedIds.add(e.id);
+            }
+        });
+
+        return result;
+    }, [expenses, selectedYear]);
 
     useEffect(() => {
         fetchData();
@@ -200,7 +266,7 @@ export default function ExpensesPage() {
             const baseDate = parseISO(data.fecha);
             if (!isValid(baseDate)) return toast.error("Fecha no válida");
             const startYear = baseDate.getFullYear();
-            const startMonth = baseDate.getMonth();
+            const startMonth = 0; // Always start from January of that year
             const monthlyImport = Number((data.importe / 12).toFixed(2));
 
             const entries = Array.from({ length: 12 }, (_, i) => {
@@ -395,7 +461,7 @@ export default function ExpensesPage() {
                                 <Label htmlFor="es_anual_main" className="text-sm font-bold text-slate-700 cursor-pointer">
                                     Reparto Anual Automático
                                 </Label>
-                                <p className="text-[10px] text-muted-foreground">Divide el importe en 12 meses (desde la fecha seleccionada)</p>
+                                <p className="text-[10px] text-muted-foreground">Divide el importe en los 12 meses del año de la factura</p>
                             </div>
                         </div>
                         <Button
@@ -408,6 +474,27 @@ export default function ExpensesPage() {
                     </div>
                 </CardContent>
             </Card>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-2">
+                    <CalendarDays className="h-5 w-5 text-indigo-500" />
+                    <h2 className="font-bold text-slate-700">Historial de Gastos</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Label className="text-xs font-bold uppercase text-slate-400 whitespace-nowrap">Filtrar por año:</Label>
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                        <SelectTrigger className="w-[120px] h-9 rounded-xl border-slate-200">
+                            <SelectValue placeholder="Año" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todos</SelectItem>
+                            {availableYears.map(year => (
+                                <SelectItem key={year} value={year}>{year}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
 
             <div className="rounded-2xl border border-slate-100 overflow-hidden shadow-sm bg-white">
                 <Table>
@@ -422,27 +509,94 @@ export default function ExpensesPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {expenses.map((e) => (
-                            <TableRow key={e.id} className={`${editingId === e.id ? "bg-blue-50/50" : "hover:bg-slate-50/50"} transition-colors`}>
-                                <TableCell className="font-semibold text-slate-600">{format(parseISO(e.fecha), "dd MMM yyyy", { locale: es })}</TableCell>
-                                <TableCell>
-                                    {e.viviendas?.nombre ? (
-                                        <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-1 rounded-md uppercase">{e.viviendas.nombre}</span>
-                                    ) : (
-                                        <span className="text-slate-400 italic text-xs">Global</span>
-                                    )}
-                                </TableCell>
-                                <TableCell className="text-sm font-medium">{e.categorias_gastos?.nombre}</TableCell>
-                                <TableCell className="text-sm text-slate-500">{e.descripcion}</TableCell>
-                                <TableCell className="text-right text-rose-600 font-black">-{Number(e.importe).toFixed(2)}€</TableCell>
-                                <TableCell>
-                                    <div className="flex gap-1">
-                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(e)} className="hover:bg-blue-50"><Pencil className="h-4 w-4 text-blue-500" /></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => deleteExpense(e)} className="hover:bg-rose-50"><Trash2 className="h-4 w-4 text-rose-500" /></Button>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        ))}
+                        {groupedExpenses.map((row) => {
+                            if (row.type === 'single') {
+                                const e = row;
+                                return (
+                                    <TableRow key={e.id} className={`${editingId === e.id ? "bg-blue-50/50" : "hover:bg-slate-50/50"} transition-colors`}>
+                                        <TableCell className="font-semibold text-slate-600">{format(parseISO(e.fecha), "dd MMM yyyy", { locale: es })}</TableCell>
+                                        <TableCell>
+                                            {e.viviendas?.nombre ? (
+                                                <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-1 rounded-md uppercase">{e.viviendas.nombre}</span>
+                                            ) : (
+                                                <span className="text-slate-400 italic text-xs">Global</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-sm font-medium">{e.categorias_gastos?.nombre}</TableCell>
+                                        <TableCell className="text-sm text-slate-500">
+                                            <div className="flex items-center gap-2">
+                                                {e.es_anual && <Sparkles className="h-3 w-3 text-indigo-400" />}
+                                                {e.descripcion}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-right text-rose-600 font-black">-{Number(e.importe).toFixed(2)}€</TableCell>
+                                        <TableCell>
+                                            <div className="flex gap-1">
+                                                <Button variant="ghost" size="icon" onClick={() => handleEdit(e)} className="hover:bg-blue-50"><Pencil className="h-4 w-4 text-blue-500" /></Button>
+                                                <Button variant="ghost" size="icon" onClick={() => deleteExpense(e)} className="hover:bg-rose-50"><Trash2 className="h-4 w-4 text-rose-500" /></Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            } else {
+                                const g = row;
+                                const isExpanded = expandedGroups[g.id];
+                                return (
+                                    <>
+                                        {/* Master Row */}
+                                        <TableRow key={g.id} className="bg-indigo-50/30 hover:bg-indigo-50/50 transition-colors cursor-pointer group" onClick={() => setExpandedGroups(prev => ({ ...prev, [g.id]: !isExpanded }))}>
+                                            <TableCell className="font-bold text-indigo-600 flex items-center gap-2">
+                                                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                {format(parseISO(g.mainItem.fecha), "yyyy", { locale: es })}
+                                            </TableCell>
+                                            <TableCell>
+                                                {g.mainItem.viviendas?.nombre ? (
+                                                    <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-md uppercase">{g.mainItem.viviendas.nombre}</span>
+                                                ) : (
+                                                    <span className="text-indigo-400 italic text-xs">Global</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-sm font-bold text-slate-700">{g.mainItem.categorias_gastos?.nombre}</TableCell>
+                                            <TableCell className="text-sm font-bold text-indigo-600 flex items-center gap-2">
+                                                <Sparkles className="h-4 w-4 text-indigo-400" />
+                                                {g.mainItem.descripcion.split('(')[0].trim()}
+                                                <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full ml-auto group-hover:bg-indigo-200">
+                                                    Reparto Anual ({g.items.length}/12)
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-right text-indigo-700 font-black">
+                                                <div className="flex flex-col items-end">
+                                                    <span>-{Number(g.total).toFixed(2)}€</span>
+                                                    <span className="text-[10px] font-normal text-indigo-400 line-through">Total</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-1">
+                                                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); deleteExpense(g.mainItem); }} className="hover:bg-rose-50"><Trash2 className="h-4 w-4 text-rose-500" /></Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+
+                                        {/* Sub-divisions */}
+                                        {isExpanded && g.items.map((e: any) => (
+                                            <TableRow key={e.id} className="bg-slate-50/30 hover:bg-slate-100/50 transition-colors border-l-4 border-l-indigo-400">
+                                                <TableCell className="pl-8 text-xs font-medium text-slate-500">{format(parseISO(e.fecha), "dd MMM yyyy", { locale: es })}</TableCell>
+                                                <TableCell className="text-[10px] text-slate-400 italic">Subdivisión</TableCell>
+                                                <TableCell className="text-xs text-slate-400">{e.categorias_gastos?.nombre}</TableCell>
+                                                <TableCell className="text-xs text-slate-500 italic px-6">{e.descripcion}</TableCell>
+                                                <TableCell className="text-right text-rose-500 font-bold text-xs">-{Number(e.importe).toFixed(2)}€</TableCell>
+                                                <TableCell>
+                                                    <div className="flex gap-1">
+                                                        <Button variant="ghost" size="sm" onClick={() => handleEdit(e)} className="h-7 w-7 p-0 hover:bg-blue-50"><Pencil className="h-3 w-3 text-blue-500" /></Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => deleteExpense(e)} className="h-7 w-7 p-0 hover:bg-rose-50"><Trash2 className="h-3 w-3 text-rose-500" /></Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </>
+                                );
+                            }
+                        })}
                     </TableBody>
                 </Table>
                 {expenses.length === 0 && (
@@ -520,7 +674,7 @@ export default function ExpensesPage() {
                                             <Label htmlFor="es_anual_modal" className="text-xs font-black text-indigo-900 cursor-pointer flex items-center gap-1">
                                                 ¿Repercutir anualmente? <Sparkles className="h-3 w-3 fill-indigo-400 text-indigo-400" />
                                             </Label>
-                                            <p className="text-[10px] text-indigo-600 font-medium">Dividirá el gasto en 12 mensualidades automáticamente.</p>
+                                            <p className="text-[10px] text-indigo-600 font-medium">Dividirá el gasto en todos los meses del año natural (Ene-Dic).</p>
                                         </div>
                                     </div>
                                 </div>
