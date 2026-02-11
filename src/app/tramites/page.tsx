@@ -495,24 +495,24 @@ export default function TramitesPage() {
                                     </h3>
                                     <Table>
                                         <TableBody>
-                                            <TableRow className="border-transparent hover:bg-white transition-colors h-16">
-                                                <TableCell className="font-bold text-slate-700">Ingresos Brutos</TableCell>
-                                                <TableCell className="text-right font-black text-slate-900 text-lg tracking-tight">{haciendaData.bruto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                            <TableRow className="border-transparent hover:bg-white transition-colors h-8">
+                                                <TableCell className="font-bold text-slate-700 py-1 text-xs">Ingresos Brutos</TableCell>
+                                                <TableCell className="text-right font-black text-slate-900 text-base tracking-tight py-1">{haciendaData.bruto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
                                             </TableRow>
-                                            <TableRow className="border-transparent hover:bg-white transition-colors h-16">
-                                                <TableCell className="font-bold text-slate-500">Comisiones Plataformas</TableCell>
-                                                <TableCell className="text-right font-bold text-rose-500">-{haciendaData.comisiones.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                            <TableRow className="border-transparent hover:bg-white transition-colors h-8">
+                                                <TableCell className="font-bold text-slate-500 py-1 text-xs">Comisiones Plataformas</TableCell>
+                                                <TableCell className="text-right font-bold text-rose-500 py-1 text-xs">-{haciendaData.comisiones.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
                                             </TableRow>
-                                            <TableRow className="border-transparent hover:bg-white transition-colors h-16">
-                                                <TableCell className="font-bold text-slate-600 flex items-center gap-2">
+                                            <TableRow className="border-transparent hover:bg-white transition-colors h-8">
+                                                <TableCell className="font-bold text-slate-600 flex items-center gap-2 py-1 text-xs">
                                                     Renta Inmobiliaria Imputada
                                                     <RentaImputadaInfo />
                                                 </TableCell>
-                                                <TableCell className="text-right font-bold text-amber-600">+{haciendaData.totalRentaImputada.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                                <TableCell className="text-right font-bold text-amber-600 py-1 text-xs">+{haciendaData.totalRentaImputada.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
                                             </TableRow>
-                                            <TableRow className="bg-white font-bold border-t-2 border-slate-900 h-20">
-                                                <TableCell className="text-slate-900 text-base">Neto Cobrado Alquiler</TableCell>
-                                                <TableCell className="text-right text-emerald-600 text-2xl font-black tracking-tighter">{haciendaData.neto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                            <TableRow className="bg-white font-bold border-t-2 border-slate-900 h-10">
+                                                <TableCell className="text-slate-900 text-sm py-1">Neto Cobrado Alquiler</TableCell>
+                                                <TableCell className="text-right text-emerald-600 text-xl font-black tracking-tighter py-1">{haciendaData.neto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
                                             </TableRow>
                                         </TableBody>
                                     </Table>
@@ -528,16 +528,16 @@ export default function TramitesPage() {
                                         <Table>
                                             <TableHeader>
                                                 <TableRow className="bg-slate-50 border-b">
-                                                    <TableHead className="text-[10px] font-black uppercase text-slate-500 px-4 h-12">Concepto</TableHead>
-                                                    <TableHead className="text-[10px] font-black uppercase text-slate-500 text-right px-4 h-12">Total</TableHead>
-                                                    <TableHead className="text-[10px] font-black uppercase text-blue-600 text-right px-4 h-12">Deduc. ({haciendaData.porcentajeOcupacion.toFixed(1)}%)</TableHead>
-                                                    <TableHead className="text-[10px] font-black uppercase text-emerald-600 text-right px-4 h-12">Indiv. (50%)</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase text-slate-500 px-3 h-7 py-0">Concepto</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase text-slate-500 text-right px-3 h-7 py-0">Total</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase text-blue-600 text-right px-3 h-7 py-0">Deduc. ({haciendaData.porcentajeOcupacion.toFixed(1)}%)</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase text-emerald-600 text-right px-3 h-7 py-0">Indiv. (50%)</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
                                                 {haciendaData.gastosPorCategoria.length > 0 ? (
                                                     haciendaData.gastosPorCategoria.map((gasto, idx) => (
-                                                        <TableRow key={idx} className="hover:bg-slate-50 border-slate-100 h-14">
+                                                        <TableRow key={idx} className="hover:bg-slate-50 border-slate-100 h-7">
                                                             <TableCell className="text-xs font-bold text-slate-700 px-4 capitalize">
                                                                 <div className="flex items-center gap-2">
                                                                     {gasto.nombre}
@@ -546,9 +546,9 @@ export default function TramitesPage() {
                                                                     )}
                                                                 </div>
                                                             </TableCell>
-                                                            <TableCell className="text-right font-medium text-slate-400 px-4 text-xs">{gasto.total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
-                                                            <TableCell className="text-right font-bold text-slate-900 px-4 text-xs bg-blue-50/30">{gasto.deducible.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
-                                                            <TableCell className="text-right font-black text-emerald-600 px-4 text-sm bg-emerald-50/20">{gasto.individual.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                                            <TableCell className="text-right font-medium text-slate-400 px-3 text-[11px] py-1">{gasto.total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                                            <TableCell className="text-right font-bold text-slate-900 px-3 text-[11px] bg-blue-50/30 py-1">{gasto.deducible.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
+                                                            <TableCell className="text-right font-black text-emerald-600 px-3 text-xs bg-emerald-50/20 py-1">{gasto.individual.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</TableCell>
                                                         </TableRow>
                                                     ))
                                                 ) : (
@@ -630,6 +630,107 @@ export default function TramitesPage() {
                                             </CardContent>
                                         </Card>
                                     ))}
+                                </div>
+                            </div>
+
+                            {/* GUÍA DE CASILLAS IRPF */}
+                            <div className="p-8 border-t-4 border-slate-900 bg-slate-100/50">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="bg-slate-900 p-2 rounded-xl">
+                                        <Landmark className="h-6 w-6 text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-black text-slate-900">Guía de Casillas IRPF (Mi Parte - 50%)</h3>
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest leading-none mt-1">Valores listos para copiar a tu declaración individual</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid md:grid-cols-2 gap-6">
+                                    {/* BLOQUE INGRESOS Y AMORTIZACIÓN */}
+                                    <div className="space-y-4">
+                                        <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-1 rounded uppercase">Ingresos (50%)</span>
+                                                <span className="text-xs font-bold text-slate-400">Box Ref. 0102</span>
+                                            </div>
+                                            <p className="text-sm font-bold text-slate-600 mb-1">Ingresos Íntegros (Mi parte)</p>
+                                            <p className="text-2xl font-black text-slate-900 font-mono tracking-tighter">
+                                                {(haciendaData.bruto / 2).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400 mt-2 italic font-medium">Nota: 50% del total bruto cobrado.</p>
+                                        </div>
+
+                                        <div className="bg-white p-5 rounded-2xl border-2 border-blue-200 shadow-sm">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2 py-1 rounded uppercase">Amortización (50%)</span>
+                                                <span className="text-xs font-bold text-slate-400">Box Ref. 0117</span>
+                                            </div>
+                                            <p className="text-sm font-bold text-slate-600 mb-1">Amortización (Mi parte)</p>
+                                            <p className="text-2xl font-black text-blue-600 font-mono tracking-tighter">
+                                                {((haciendaData.gastosPorCategoria.find(g => g.nombre.includes("Amortización"))?.deducible || 0) / 2).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400 mt-2 italic font-medium">Deducción de mi titularidad (50%).</p>
+                                        </div>
+                                    </div>
+
+                                    {/* BLOQUE GASTOS Y RENTA IMPUTADA */}
+                                    <div className="space-y-4">
+                                        <div className="bg-white p-5 rounded-2xl border-2 border-rose-100 shadow-sm">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2 py-1 rounded uppercase">Gastos (50%)</span>
+                                                <span className="text-xs font-bold text-slate-400">Box Ref. 0113/0115/0116</span>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-slate-600 font-medium font-bold italic">Comisiones (0113):</span>
+                                                    <span className="font-black text-slate-900">{(haciendaData.comisiones / 2).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-slate-600 font-medium font-bold italic">Suministros (0115):</span>
+                                                    <span className="font-black text-slate-900">
+                                                        {(haciendaData.gastosPorCategoria
+                                                            .filter(g => !g.nombre.includes("Comisión") && !g.nombre.includes("Amortización") && (g.nombre.includes("Luz") || g.nombre.includes("Agua") || g.nombre.includes("Internet")))
+                                                            .reduce((acc, g) => acc + g.individual, 0))
+                                                            .toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-slate-600 font-bold italic">Otros Deducibles (0116):</span>
+                                                    <span className="font-black text-slate-900">
+                                                        {(haciendaData.gastosPorCategoria
+                                                            .filter(g => !g.nombre.includes("Comisión") && !g.nombre.includes("Amortización") && !g.nombre.includes("Luz") && !g.nombre.includes("Agua") && !g.nombre.includes("Internet"))
+                                                            .reduce((acc, g) => acc + g.individual, 0))
+                                                            .toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-slate-900 p-5 rounded-2xl border border-slate-700 shadow-xl overflow-hidden relative">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <span className="bg-amber-500 text-slate-900 text-[10px] font-black px-2 py-1 rounded uppercase">Uso Propio (50%)</span>
+                                                <span className="text-xs font-bold text-slate-400">Sección: Inmuebles</span>
+                                            </div>
+                                            <p className="text-sm font-bold text-slate-300 mb-1">Renta Imputada (Mi parte)</p>
+                                            <p className="text-2xl font-black text-amber-500 font-mono tracking-tighter">
+                                                {(haciendaData.totalRentaImputada / 2).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400 mt-2 italic font-medium">Importe a declarar por mi 50% de titularidad.</p>
+                                            <div className="absolute -right-4 -bottom-4 opacity-10">
+                                                <Landmark className="h-24 w-24 text-white" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-8 bg-blue-50/50 p-4 rounded-xl border border-blue-100/50">
+                                    <p className="text-[10px] text-blue-800/70 font-bold uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <Info className="h-3 w-3" />
+                                        IMPORTANTE: Valores Calculados al 50%
+                                    </p>
+                                    <p className="text-xs text-slate-600 leading-relaxed italic">
+                                        Los importes de esta sección ya han sido divididos por dos para representar tu titularidad individual. Si tu cónyuge o socio también declara, deberá poner exactamente los mismos importes en su declaración.
+                                    </p>
                                 </div>
                             </div>
                         </CardContent>
