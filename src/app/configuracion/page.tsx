@@ -24,7 +24,11 @@ export default function ConfigPage() {
         ref_catastral?: string,
         licencia_turistica?: string,
         nrua?: string,
-        cru?: string
+        cru?: string,
+        valor_suelo?: number,
+        superficie_construida?: number,
+        valor_catastral_construccion?: number,
+        valor_catastral_total?: number
     }>({
         nombre: "",
         direccion: "",
@@ -33,7 +37,11 @@ export default function ConfigPage() {
         ref_catastral: "",
         licencia_turistica: "",
         nrua: "",
-        cru: ""
+        cru: "",
+        valor_suelo: 0,
+        superficie_construida: 0,
+        valor_catastral_construccion: 0,
+        valor_catastral_total: 0
     });
     const [newPlataforma, setNewPlataforma] = useState({ nombre: "", comision_porcentaje: 0 });
     const [newCategoria, setNewCategoria] = useState({ nombre: "" });
@@ -89,7 +97,11 @@ export default function ConfigPage() {
             ref_catastral: v.ref_catastral || "",
             licencia_turistica: v.licencia_turistica || "",
             nrua: v.nrua || "",
-            cru: v.cru || ""
+            cru: v.cru || "",
+            valor_suelo: v.valor_suelo || 0,
+            superficie_construida: v.superficie_construida || 0,
+            valor_catastral_construccion: v.valor_catastral_construccion || 0,
+            valor_catastral_total: v.valor_catastral_total || 0,
         });
     }
 
@@ -103,7 +115,11 @@ export default function ConfigPage() {
             ref_catastral: "",
             licencia_turistica: "",
             nrua: "",
-            cru: ""
+            cru: "",
+            valor_suelo: 0,
+            superficie_construida: 0,
+            valor_catastral_construccion: 0,
+            valor_catastral_total: 0,
         });
     }
 
@@ -208,7 +224,7 @@ export default function ConfigPage() {
                                     <Input id="vivienda-dir" placeholder="Ej: Calle Mayor 123" value={newVivienda.direccion} onChange={e => setNewVivienda({ ...newVivienda, direccion: e.target.value })} />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-4 gap-4">
+                            <div className="grid grid-cols-5 gap-4">
                                 <div className="grid gap-2">
                                     <Label htmlFor="vivienda-catastral">Ref. Catastral</Label>
                                     <Input id="vivienda-catastral" placeholder="Referencia Catastral" value={newVivienda.ref_catastral} onChange={e => setNewVivienda({ ...newVivienda, ref_catastral: e.target.value })} />
@@ -224,6 +240,24 @@ export default function ConfigPage() {
                                 <div className="grid gap-2">
                                     <Label htmlFor="vivienda-cru">CRU</Label>
                                     <Input id="vivienda-cru" placeholder="CRU (Cód. Registro)" value={newVivienda.cru} onChange={e => setNewVivienda({ ...newVivienda, cru: e.target.value })} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-superficie">Sup. Construida</Label>
+                                    <Input id="vivienda-superficie" type="number" placeholder="m²" value={newVivienda.superficie_construida} onChange={e => setNewVivienda({ ...newVivienda, superficie_construida: Number(e.target.value) })} />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-suelo">Valor Suelo</Label>
+                                    <Input id="vivienda-suelo" type="number" step="0.01" placeholder="Valor suelo" value={newVivienda.valor_suelo} onChange={e => setNewVivienda({ ...newVivienda, valor_suelo: Number(e.target.value) })} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-construccion">V. Catastral Const.</Label>
+                                    <Input id="vivienda-construccion" type="number" step="0.01" placeholder="V. catastral construcción" value={newVivienda.valor_catastral_construccion} onChange={e => setNewVivienda({ ...newVivienda, valor_catastral_construccion: Number(e.target.value) })} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-catastral-total">Valor Catastral</Label>
+                                    <Input id="vivienda-catastral-total" type="number" step="0.01" placeholder="Valor catastral total" value={newVivienda.valor_catastral_total} onChange={e => setNewVivienda({ ...newVivienda, valor_catastral_total: Number(e.target.value) })} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -246,23 +280,26 @@ export default function ConfigPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Nombre</TableHead>
-                                <TableHead>Dirección</TableHead>
                                 <TableHead>Ref. Catastral</TableHead>
-                                <TableHead>Licencia</TableHead>
-                                <TableHead>NRUA</TableHead>
-                                <TableHead>CRU</TableHead>
+                                <TableHead>V. Suelo</TableHead>
+                                <TableHead>Sup. Const.</TableHead>
+                                <TableHead>V. Const.</TableHead>
+                                <TableHead>V. Catastral</TableHead>
                                 <TableHead className="w-[100px]">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {viviendas.map((v) => (
                                 <TableRow key={v.id} className={editingViviendaId === v.id ? "bg-muted/50" : ""}>
-                                    <TableCell className="font-medium">{v.nombre}</TableCell>
-                                    <TableCell>{v.direccion}</TableCell>
+                                    <TableCell className="font-medium">
+                                        <div>{v.nombre}</div>
+                                        <div className="text-xs text-muted-foreground">{v.direccion}</div>
+                                    </TableCell>
                                     <TableCell className="text-xs font-mono">{v.ref_catastral}</TableCell>
-                                    <TableCell className="text-xs">{v.licencia_turistica}</TableCell>
-                                    <TableCell className="text-xs">{v.nrua}</TableCell>
-                                    <TableCell className="text-xs">{v.cru}</TableCell>
+                                    <TableCell className="text-xs">{v.valor_suelo}€</TableCell>
+                                    <TableCell className="text-xs">{v.superficie_construida}m²</TableCell>
+                                    <TableCell className="text-xs">{v.valor_catastral_construccion}€</TableCell>
+                                    <TableCell className="text-xs font-bold">{v.valor_catastral_total}€</TableCell>
                                     <TableCell className="flex gap-2">
                                         <Button variant="ghost" size="icon" onClick={() => editVivienda(v)}><Pencil className="h-4 w-4 text-blue-500" /></Button>
                                         <Button variant="ghost" size="icon" onClick={() => deleteItem("viviendas", v.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
