@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@300;400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#22aec3",
+                        "background-light": "#f9fafa",
+                        "background-dark": "#1f242e",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Public Sans', sans-serif;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark min-h-screen text-[#121617] dark:text-gray-100">
+<!-- TopAppBar -->
+<div class="sticky top-0 z-50 flex items-center bg-white dark:bg-background-dark p-4 pb-2 justify-between border-b border-gray-100 dark:border-gray-800">
+<div class="text-primary flex size-10 shrink-0 items-center justify-center cursor-pointer">
+<span class="material-symbols-outlined">arrow_back_ios</span>
+</div>
+<h2 class="text-[#121617] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-10">Ajustes del Sistema</h2>
+</div>
+<div class="max-w-md mx-auto pb-12">
+<!-- Section: Comisiones de Plataformas -->
+<div class="px-4 pt-6 pb-2">
+<h3 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-1">Comisiones de Plataformas</h3>
+</div>
+<div class="mx-4 bg-white dark:bg-gray-800/50 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800">
+<!-- ListItem: Airbnb -->
+<div class="flex items-center gap-4 px-4 min-h-14 justify-between border-b border-gray-50 dark:border-gray-800">
+<div class="flex items-center gap-4">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 dark:bg-primary/20 shrink-0 size-10">
+<span class="material-symbols-outlined">home_work</span>
+</div>
+<p class="text-[#121617] dark:text-gray-200 text-base font-medium leading-normal flex-1 truncate">Airbnb (%)</p>
+</div>
+<div class="shrink-0 flex items-center gap-2">
+<span class="text-primary font-bold">15%</span>
+<span class="material-symbols-outlined text-gray-400 size-5">chevron_right</span>
+</div>
+</div>
+<!-- ListItem: Booking.com -->
+<div class="flex items-center gap-4 px-4 min-h-14 justify-between">
+<div class="flex items-center gap-4">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 dark:bg-primary/20 shrink-0 size-10">
+<span class="material-symbols-outlined">public</span>
+</div>
+<p class="text-[#121617] dark:text-gray-200 text-base font-medium leading-normal flex-1 truncate">Booking.com (%)</p>
+</div>
+<div class="shrink-0 flex items-center gap-2">
+<span class="text-primary font-bold">18%</span>
+<span class="material-symbols-outlined text-gray-400 size-5">chevron_right</span>
+</div>
+</div>
+</div>
+<!-- Section: Moneda -->
+<div class="px-4 pt-8 pb-2">
+<h3 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-1">Preferencia de Moneda</h3>
+</div>
+<div class="mx-4 bg-white dark:bg-gray-800/50 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800">
+<div class="flex items-center gap-4 px-4 min-h-14 justify-between">
+<div class="flex items-center gap-4">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 dark:bg-primary/20 shrink-0 size-10">
+<span class="material-symbols-outlined">payments</span>
+</div>
+<p class="text-[#121617] dark:text-gray-200 text-base font-medium leading-normal flex-1 truncate">Moneda Local</p>
+</div>
+<div class="shrink-0 flex items-center gap-2">
+<span class="text-gray-500 dark:text-gray-400 text-sm">USD ($)</span>
+<span class="material-symbols-outlined text-gray-400 size-5">unfold_more</span>
+</div>
+</div>
+</div>
+<!-- Section: Notificaciones -->
+<div class="px-4 pt-8 pb-2">
+<h3 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-1">Notificaciones</h3>
+</div>
+<div class="mx-4 bg-white dark:bg-gray-800/50 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800">
+<div class="flex items-center gap-4 px-4 min-h-14 justify-between border-b border-gray-50 dark:border-gray-800">
+<div class="flex items-center gap-4">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 dark:bg-primary/20 shrink-0 size-10">
+<span class="material-symbols-outlined">notifications_active</span>
+</div>
+<p class="text-[#121617] dark:text-gray-200 text-base font-medium leading-normal flex-1 truncate">Nuevas Reservas</p>
+</div>
+<div class="shrink-0">
+<div class="w-11 h-6 bg-primary rounded-full relative">
+<div class="absolute right-0.5 top-0.5 size-5 bg-white rounded-full shadow-sm"></div>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4 px-4 min-h-14 justify-between">
+<div class="flex items-center gap-4">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 dark:bg-primary/20 shrink-0 size-10">
+<span class="material-symbols-outlined">mail</span>
+</div>
+<p class="text-[#121617] dark:text-gray-200 text-base font-medium leading-normal flex-1 truncate">Resumen Semanal</p>
+</div>
+<div class="shrink-0">
+<div class="w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full relative">
+<div class="absolute left-0.5 top-0.5 size-5 bg-white rounded-full shadow-sm"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Section: Calendarios Sincronizados -->
+<div class="px-4 pt-8 pb-2">
+<h3 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 px-1">Conectividad</h3>
+</div>
+<div class="mx-4 bg-white dark:bg-gray-800/50 rounded-xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800">
+<div class="flex items-center gap-4 px-4 min-h-14 justify-between">
+<div class="flex items-center gap-4">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 dark:bg-primary/20 shrink-0 size-10">
+<span class="material-symbols-outlined">sync</span>
+</div>
+<div class="flex flex-col">
+<p class="text-[#121617] dark:text-gray-200 text-base font-medium leading-normal truncate">Calendarios iCal</p>
+<p class="text-xs text-green-500 font-medium">3 calendarios activos</p>
+</div>
+</div>
+<div class="shrink-0">
+<span class="material-symbols-outlined text-gray-400 size-5">chevron_right</span>
+</div>
+</div>
+</div>
+<!-- System Version Info -->
+<div class="mt-12 text-center px-4">
+<p class="text-gray-400 text-xs font-medium uppercase tracking-widest">Property Manager Pro</p>
+<p class="text-gray-300 dark:text-gray-600 text-[10px] mt-1 italic">Versión 2.4.1-stable</p>
+</div>
+<!-- Bottom Action -->
+<div class="px-4 mt-8">
+<button class="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
+<span class="material-symbols-outlined">save</span>
+                Guardar Cambios
+            </button>
+</div>
+</div>
+<!-- Navigation Bar (iOS Style Bottom) -->
+<div class="fixed bottom-0 left-0 right-0 bg-white dark:bg-background-dark border-t border-gray-100 dark:border-gray-800 px-6 py-2 pb-8 flex justify-between items-center z-50">
+<div class="flex flex-col items-center gap-1 text-gray-400">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[10px] font-bold">Inicio</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-gray-400">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="text-[10px] font-bold">Reservas</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined fill-[1]">settings</span>
+<span class="text-[10px] font-bold">Ajustes</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-gray-400">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-bold">Perfil</span>
+</div>
+</div>
+</body></html>

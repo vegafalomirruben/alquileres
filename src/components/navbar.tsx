@@ -20,7 +20,7 @@ export function Navbar() {
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
         { href: "/alquileres", label: "Alquileres", icon: CreditCard },
         { href: "/proximos", label: "Calendario", icon: CalendarIcon },
-        { href: "/graficos", label: "Gráficos", icon: BarChart3 },
+        { href: "/graficos", label: "Stats", icon: BarChart3 },
         { href: "/gastos", label: "Gastos", icon: Building2 },
         { href: "/usuarios", label: "Usuarios", icon: Users },
         { href: "/configuracion", label: "Ajustes", icon: Settings },
@@ -34,40 +34,42 @@ export function Navbar() {
     };
 
     return (
-        <header className="sticky top-0 z-50 w-full border-b bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/60">
-            <div className="container flex h-16 items-center px-4">
-                <Link href="/" className="mr-8 flex items-center space-x-2 transition-all hover:scale-105">
-                    <div className="bg-blue-600 p-1.5 rounded-lg">
-                        <ShieldCheck className="h-5 w-5 text-white" />
-                    </div>
-                    <span className="text-xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
-                        Alquileres Pro
-                    </span>
-                </Link>
+        <header className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-md border-b border-primary/10">
+            <div className="container flex h-16 items-center px-4 justify-between">
+                <div className="flex items-center gap-8">
+                    <Link href="/" className="flex items-center gap-3 transition-all hover:opacity-80">
+                        <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                            <ShieldCheck className="h-6 w-6" />
+                        </div>
+                        <h1 className="text-xl font-extrabold tracking-tight hidden sm:block">
+                            Alquileres<span className="text-primary italic">Pro</span>
+                        </h1>
+                    </Link>
 
-                <nav className="hidden lg:flex items-center space-x-1 text-sm font-medium flex-1">
-                    {navLinks.map((link) => {
-                        const isActive = pathname === link.href;
-                        return (
-                            <Link
-                                key={link.href}
-                                href={link.href}
-                                className={`px-4 py-2 rounded-full transition-all flex items-center gap-2 group ${isActive
-                                    ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20"
-                                    : "text-slate-600 hover:text-blue-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                                    }`}
-                            >
-                                <link.icon className={`h-4 w-4 transition-transform group-hover:scale-110 ${isActive ? "text-blue-600" : "text-slate-400 group-hover:text-blue-600"}`} />
-                                {link.label}
-                            </Link>
-                        );
-                    })}
-                </nav>
+                    <nav className="hidden lg:flex items-center space-x-1 text-sm font-bold">
+                        {navLinks.map((link) => {
+                            const isActive = pathname === link.href;
+                            return (
+                                <Link
+                                    key={link.href}
+                                    href={link.href}
+                                    className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 group ${isActive
+                                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                                        : "text-foreground/70 hover:text-primary hover:bg-primary/5"
+                                        }`}
+                                >
+                                    <link.icon className={`h-4 w-4 transition-transform group-hover:scale-110`} />
+                                    {link.label}
+                                </Link>
+                            );
+                        })}
+                    </nav>
+                </div>
 
                 <div className="flex items-center gap-4">
-                    <div className="hidden md:flex flex-col items-end mr-2">
-                        <span className="text-sm font-semibold capitalize text-slate-700">
-                            {format(new Date(), "EEEE, d MMMM yyyy", { locale: es })}
+                    <div className="hidden md:flex flex-col items-end">
+                        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                            {format(new Date(), "EEEE, d MMM", { locale: es })}
                         </span>
                     </div>
 
@@ -75,15 +77,15 @@ export function Navbar() {
                         variant="ghost"
                         size="sm"
                         onClick={handleLogout}
-                        className="hidden sm:flex text-slate-500 hover:text-rose-600 hover:bg-rose-50 gap-2 items-center rounded-full"
+                        className="hidden sm:flex text-foreground/60 hover:text-destructive hover:bg-destructive/5 gap-2 items-center rounded-xl font-bold uppercase tracking-wider text-[10px]"
                     >
                         <LogOut className="h-4 w-4" />
                         <span>Salir</span>
                     </Button>
 
                     <div className="lg:hidden">
-                        <Button variant="ghost" size="icon" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-                            {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                        <Button variant="ghost" size="icon" onClick={() => setIsMenuOpen(!isMenuOpen)} className="rounded-full bg-primary/5">
+                            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
                         </Button>
                     </div>
                 </div>
@@ -91,8 +93,8 @@ export function Navbar() {
 
             {/* Mobile Menu */}
             {isMenuOpen && (
-                <div className="lg:hidden border-t bg-white dark:bg-slate-950 p-4 space-y-4 animate-in slide-in-from-top-2">
-                    <nav className="flex flex-col space-y-2">
+                <div className="lg:hidden border-t bg-background/95 backdrop-blur-xl p-4 space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <nav className="flex flex-col space-y-1">
                         {navLinks.map((link) => {
                             const isActive = pathname === link.href;
                             return (
@@ -100,9 +102,9 @@ export function Navbar() {
                                     key={link.href}
                                     href={link.href}
                                     onClick={() => setIsMenuOpen(false)}
-                                    className={`flex items-center gap-3 text-sm font-medium transition-all p-3 rounded-xl ${isActive
-                                        ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600"
-                                        : "text-slate-600 hover:bg-slate-100"
+                                    className={`flex items-center gap-4 text-sm font-bold transition-all p-4 rounded-2xl ${isActive
+                                        ? "bg-primary text-primary-foreground shadow-md"
+                                        : "text-foreground/70 hover:bg-primary/5"
                                         }`}
                                 >
                                     <link.icon className="h-5 w-5" />
@@ -110,14 +112,15 @@ export function Navbar() {
                                 </Link>
                             );
                         })}
-                        <hr className="my-2 border-slate-100" />
-                        <button
-                            onClick={handleLogout}
-                            className="flex items-center gap-3 text-sm font-medium text-rose-600 p-3 rounded-xl hover:bg-rose-50 w-full text-left"
-                        >
-                            <LogOut className="h-5 w-5" />
-                            Cerrar Sesión
-                        </button>
+                        <div className="pt-4 border-t border-primary/5 mt-2">
+                            <button
+                                onClick={handleLogout}
+                                className="flex items-center gap-4 text-sm font-bold text-destructive p-4 rounded-2xl hover:bg-destructive/5 w-full text-left"
+                            >
+                                <LogOut className="h-5 w-5" />
+                                CERRAR SESIÓN
+                            </button>
+                        </div>
                     </nav>
                 </div>
             )}
