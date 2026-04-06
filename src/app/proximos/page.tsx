@@ -5,7 +5,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSam
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Loader2, Plus, RefreshCw, Filter } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -33,8 +33,9 @@ export default function CalendarPage() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [loading, setLoading] = useState(true);
     const [showLogs, setShowLogs] = useState(false);
-    const [viewMode, setViewMode] = useState<"bookings" | "availability" | "annual">("bookings");
+    const [viewMode, setViewMode] = useState<"bookings" | "annual">("bookings");
     const [plataformas, setPlataformas] = useState<any[]>([]);
+    const [selectedVivienda, setSelectedVivienda] = useState<string>("all");
 
     // Booking Dialog state
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -102,7 +103,7 @@ export default function CalendarPage() {
 
     function openBookingDialog(viviendaId: string, date: Date) {
         setNewBooking({
-            vivienda_id: viviendaId,
+            vivienda_id: viviendaId || (selectedVivienda !== "all" ? viviendas.find(v => v.nombre === selectedVivienda)?.id : "") || "",
             plataforma_id: plataformas.find(p => p.nombre.toLowerCase().includes("directo") || p.nombre.toLowerCase().includes("personal"))?.id || plataformas[0]?.id || "",
             fecha_entrada: format(date, "yyyy-MM-dd"),
             fecha_salida: format(addMonths(date, 0), "yyyy-MM-dd"), // Placeholder
@@ -120,7 +121,11 @@ export default function CalendarPage() {
 
     const getEventsForDay = (day: Date) => {
         const targetDay = startOfDay(day);
-        return events.filter(e => {
+        const sourceEvents = selectedVivienda === "all"
+            ? events
+            : events.filter(e => e.vivienda === selectedVivienda);
+
+        return sourceEvents.filter(e => {
             const start = startOfDay(parseISO(e.start));
             const end = startOfDay(parseISO(e.end));
 
@@ -140,17 +145,29 @@ export default function CalendarPage() {
         }
     };
 
-    // Group events by property if multiple on same day to avoid clutter? 
-    // For now list them all.
-
     return (
         <div className="space-y-2 sm:space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
                 <div>
                     <h1 className="text-xl sm:text-3xl font-bold tracking-tight">Calendario</h1>
-                    <p className="text-muted-foreground text-xs sm:text-base hidden sm:block"> {viewMode === "bookings" ? "Reservas consolidadas de todas las fuentes." : "Días libres para cada propiedad."}</p>
+                    <p className="text-muted-foreground text-xs sm:text-base hidden sm:block">Reservas consolidadas de todas las fuentes.</p>
                 </div>
-                <div className="flex flex-col xs:flex-row items-start xs:items-center gap-4 w-full sm:w-auto">
+                <div className="flex flex-col xs:flex-row items-start xs:items-center gap-2 sm:gap-4 w-full sm:w-auto">
+                    <div className="flex items-center gap-2 w-full xs:w-auto">
+                        <Filter className="h-4 w-4 text-muted-foreground hidden xs:block" />
+                        <Select value={selectedVivienda} onValueChange={setSelectedVivienda}>
+                            <SelectTrigger className="h-8 w-full xs:w-[180px] text-xs">
+                                <SelectValue placeholder="Todas las viviendas" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todas las viviendas</SelectItem>
+                                {viviendas.map(v => (
+                                    <SelectItem key={v.id} value={v.nombre}>{v.nombre}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <div className="flex border rounded-lg p-1 bg-muted/50 w-full xs:w-auto">
                         <Button
                             variant={viewMode === "bookings" ? "default" : "ghost"}
@@ -159,14 +176,6 @@ export default function CalendarPage() {
                             onClick={() => setViewMode("bookings")}
                         >
                             Reservas
-                        </Button>
-                        <Button
-                            variant={viewMode === "availability" ? "default" : "ghost"}
-                            size="sm"
-                            className="h-7 sm:h-8 flex-1 xs:flex-initial text-[10px] sm:text-xs"
-                            onClick={() => setViewMode("availability")}
-                        >
-                            Disponibles
                         </Button>
                         <Button
                             variant={viewMode === "annual" ? "default" : "ghost"}
@@ -235,7 +244,6 @@ export default function CalendarPage() {
 
                                                     // Detect if it's the first or last day of THIS specific reservation
                                                     const start = startOfDay(parseISO(ev.start));
-                                                    const lastNight = subMonths(addMonths(startOfDay(parseISO(ev.end)), 0), 0); // Need day before end
                                                     const end = startOfDay(parseISO(ev.end));
 
                                                     isStart = isSameDay(d, start);
@@ -281,19 +289,6 @@ export default function CalendarPage() {
                                 const isCurrentMonth = isSameMonth(day, currentDate);
                                 const isToday = isSameDay(day, new Date());
 
-                                // Calculate availability
-                                // Case 2: Specific properties marked as 'Libre' (new logic)
-                                const explicitLibreViviendas = dayEvents.filter(ev => {
-                                    if (ev.source !== "manual" || !ev.plataforma_id) return false;
-                                    const plat = plataformas.find(p => p.id === ev.plataforma_id);
-                                    return plat?.nombre?.toLowerCase().includes("libre");
-                                });
-
-                                const availableViviendas = explicitLibreViviendas.map(ev => ({
-                                    id: viviendas.find(v => v.nombre === ev.vivienda)?.id || ev.id,
-                                    nombre: ev.vivienda
-                                }));
-
                                 return (
                                     <div
                                         key={day.toISOString()}
@@ -314,38 +309,24 @@ export default function CalendarPage() {
                                         </div>
 
                                         <div className="space-y-0.5">
-                                            {viewMode === "bookings" ? (
-                                                dayEvents.map(ev => (
-                                                    <div
-                                                        key={ev.id}
-                                                        onClick={(e) => e.stopPropagation()} // Prevent opening dialog when clicking existing event
-                                                        className={`
-                                                            text-[9px] sm:text-[10px] p-0.5 sm:p-1 rounded-sm border truncate cursor-pointer hover:opacity-80 transition-opacity
-                                                            ${getSourceColor(ev)}
-                                                        `}
-                                                        title={`${ev.title} - ${ev.vivienda}`}
-                                                    >
-                                                        <div className="flex items-center gap-1 leading-tight">
-                                                            <PlatformLogo platform={ev.source} className="h-2.5 w-2.5 shrink-0" />
-                                                            <span className="font-semibold truncate">Cód. {ev.vivienda}</span>
-                                                        </div>
-                                                        {isSameDay(parseISO(ev.start), day) && <span className="opacity-75 block text-[7px] sm:text-[8px] leading-none">In</span>}
-                                                        {isSameDay(parseISO(ev.end), day) && <span className="opacity-75 block text-[7px] sm:text-[8px] leading-none">Out</span>}
+                                            {dayEvents.map(ev => (
+                                                <div
+                                                    key={ev.id}
+                                                    onClick={(e) => e.stopPropagation()} // Prevent opening dialog when clicking existing event
+                                                    className={`
+                                                        text-[9px] sm:text-[10px] p-0.5 sm:p-1 rounded-sm border truncate cursor-pointer hover:opacity-80 transition-opacity
+                                                        ${getSourceColor(ev)}
+                                                    `}
+                                                    title={`${ev.title} - ${ev.vivienda}`}
+                                                >
+                                                    <div className="flex items-center gap-1 leading-tight">
+                                                        <PlatformLogo platform={ev.source} className="h-2.5 w-2.5 shrink-0" />
+                                                        <span className="font-semibold truncate">{ev.vivienda}</span>
                                                     </div>
-                                                ))
-                                            ) : (
-                                                availableViviendas.map(v => (
-                                                    <div
-                                                        key={v.id}
-                                                        onClick={() => openBookingDialog(v.id, day)}
-                                                        className="group text-[9px] p-0.5 rounded-sm border border-emerald-100 bg-emerald-50 text-emerald-700 truncate cursor-pointer hover:bg-emerald-100 hover:border-emerald-200 transition-colors flex items-center justify-between"
-                                                        title={`Disponible: ${v.nombre}. Haz clic para reservar.`}
-                                                    >
-                                                        <span>✅ {v.nombre}</span>
-                                                        <Plus className="h-1.5 w-1.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                    </div>
-                                                ))
-                                            )}
+                                                    {isSameDay(parseISO(ev.start), day) && <span className="opacity-75 block text-[7px] sm:text-[8px] leading-none">In</span>}
+                                                    {isSameDay(parseISO(ev.end), day) && <span className="opacity-75 block text-[7px] sm:text-[8px] leading-none">Out</span>}
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 );

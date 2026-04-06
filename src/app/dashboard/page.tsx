@@ -211,6 +211,26 @@ export default function DashboardsPage() {
                                 </TableCell>
                             </TableRow>
                         ))}
+                        <TableRow className="bg-primary/10 hover:bg-primary/20 transition-colors">
+                            <TableCell className="font-extrabold text-sm uppercase tracking-tight text-primary">Total Anual</TableCell>
+                            {years.map(year => (
+                                <TableCell
+                                    key={`total-${year}`}
+                                    className="text-center font-extrabold text-sm text-primary"
+                                >
+                                    {isCurrency
+                                        ? (colTotals[year] !== 0 ? `${colTotals[year].toLocaleString('es-ES', { minimumFractionDigits: 0 })}€` : "-")
+                                        : (colTotals[year] !== 0 ? colTotals[year].toFixed(1) : "-")
+                                    }
+                                </TableCell>
+                            ))}
+                            <TableCell className="text-center font-black text-sm text-primary">
+                                {isCurrency
+                                    ? (grandTotal !== 0 ? `${grandTotal.toLocaleString('es-ES', { minimumFractionDigits: 0 })}€` : "-")
+                                    : (grandTotal !== 0 ? grandTotal.toFixed(1) : "-")
+                                }
+                            </TableCell>
+                        </TableRow>
                     </TableBody>
                 </Table>
             </div>
