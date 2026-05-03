@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, parseISO, getMonth, getYear } from "date-fns";
 import { es } from "date-fns/locale";
-import { TrendingUp, Wallet, ArrowDown, LayoutDashboard, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { TrendingUp, Wallet, ArrowDown, LayoutDashboard, Filter, ChevronDown, ChevronUp, Calendar } from "lucide-react";
 import { PlatformLogo } from "@/components/platform-logo";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { splitRentals } from "@/lib/rentalSplitter";
@@ -76,7 +76,7 @@ export default function DashboardsPage() {
         });
     }, [filteredRentalsData, filteredExpensesData]);
 
-    const getMatrixData = (metric: "neto" | "bruto" | "adr" | "real" | "gastos") => {
+    const getMatrixData = (metric: "neto" | "bruto" | "adr" | "real" | "gastos" | "noches") => {
         const matrix: any = {};
         const colTotals: any = {};
         const rowTotals: any = Array(12).fill(0);
@@ -106,6 +106,8 @@ export default function DashboardsPage() {
                     const net = monthRentals.reduce((acc, r) => acc + Number(r.precio_neto), 0);
                     const exp = monthExpenses.reduce((acc, e) => acc + Number(e.importe), 0);
                     val = net - exp;
+                } else if (metric === "noches") {
+                    val = monthRentals.reduce((acc, r) => acc + Number(r.noches), 0);
                 } else {
                     val = monthRentals.reduce((acc, r) => acc + Number(r.precio_bruto), 0);
                 }
@@ -127,6 +129,8 @@ export default function DashboardsPage() {
                 const net = monthRentalsAllYears.reduce((acc, r) => acc + Number(r.precio_neto), 0);
                 const exp = monthExpensesAllYears.reduce((acc, e) => acc + Number(e.importe), 0);
                 rowTotals[month] = net - exp;
+            } else if (metric === "noches") {
+                rowTotals[month] = monthRentalsAllYears.reduce((acc, r) => acc + Number(r.noches), 0);
             } else {
                 rowTotals[month] = monthRentalsAllYears.reduce((acc, r) => acc + Number(metric === "neto" ? r.precio_neto : r.precio_bruto), 0);
             }
@@ -145,6 +149,8 @@ export default function DashboardsPage() {
                 const net = yearRentals.reduce((acc, r) => acc + Number(r.precio_neto), 0);
                 const exp = yearExpenses.reduce((acc, e) => acc + Number(e.importe), 0);
                 colTotals[year] = net - exp;
+            } else if (metric === "noches") {
+                colTotals[year] = yearRentals.reduce((acc, r) => acc + Number(r.noches), 0);
             } else {
                 colTotals[year] = yearRentals.reduce((acc, r) => acc + Number(metric === "neto" ? r.precio_neto : r.precio_bruto), 0);
             }
@@ -162,6 +168,8 @@ export default function DashboardsPage() {
             const net = relevantRentals.reduce((acc, r) => acc + Number(r.precio_neto), 0);
             const exp = relevantExpenses.reduce((acc, e) => acc + Number(e.importe), 0);
             grandTotal = net - exp;
+        } else if (metric === "noches") {
+            grandTotal = relevantRentals.reduce((acc, r) => acc + Number(r.noches), 0);
         } else {
             grandTotal = relevantRentals.reduce((acc, r) => acc + Number(metric === "neto" ? r.precio_neto : r.precio_bruto), 0);
         }
@@ -239,11 +247,12 @@ export default function DashboardsPage() {
         );
     };
 
-    const dashboardItems: { title: string; metric: "neto" | "bruto" | "adr" | "real" | "gastos"; isCurrency: boolean; icon: any }[] = [
+    const dashboardItems: { title: string; metric: "neto" | "bruto" | "adr" | "real" | "gastos" | "noches"; isCurrency: boolean; icon: any }[] = [
         { title: "Beneficio Real", metric: "real", isCurrency: true, icon: TrendingUp },
         { title: "Gasto Operativo", metric: "gastos", isCurrency: true, icon: ArrowDown },
         { title: "Ingreso Neto", metric: "neto", isCurrency: true, icon: Wallet },
-        { title: "Ocupación Media (ADR)", metric: "adr", isCurrency: true, icon: LayoutDashboard },
+        { title: "Precio Medio (ADR)", metric: "adr", isCurrency: true, icon: LayoutDashboard },
+        { title: "Días Alquilados", metric: "noches", isCurrency: false, icon: Calendar },
     ];
 
     const toggleDashboard = (title: string) => {
