@@ -12,6 +12,7 @@ import { format, parseISO, differenceInDays } from "date-fns";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { splitRentals } from "@/lib/rentalSplitter";
 
 export default function TramitesPage() {
     const isLeapYear = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
@@ -93,8 +94,8 @@ export default function TramitesPage() {
             const { data, error } = await supabase
                 .from("alquileres")
                 .select("fecha_entrada, fecha_salida, plataforma_id, viviendas(nrua)")
-                .gte("fecha_entrada", startDate)
                 .lte("fecha_entrada", endDate)
+                .gte("fecha_salida", startDate)
                 .in("plataforma_id", selectedPlatIds);
 
             if (error) throw error;
@@ -103,12 +104,16 @@ export default function TramitesPage() {
                 toast.info(`No se encontraron alquileres para los criterios seleccionados.`);
                 return;
             }
+            
+            const splitData = splitRentals(data).filter((r: any) => 
+                r.fecha_entrada >= startDate && r.fecha_entrada <= endDate
+            );
 
             // CSV Header
             let csvContent = "NRUA;fechaentrada;fechasalida;huespedes;codigofinalidad\n";
 
             // Rows
-            data.forEach((rental: any) => {
+            splitData.forEach((rental: any) => {
                 const nrua = rental.viviendas?.nrua || "";
                 const entrada = format(parseISO(rental.fecha_entrada), "dd.MM.yyyy");
                 const salida = format(parseISO(rental.fecha_salida), "dd.MM.yyyy");
@@ -153,14 +158,18 @@ export default function TramitesPage() {
             const endDate = `${year}-12-31`;
 
             // 1. Fetch Rentals
-            const { data: rentals, error: rError } = await supabase
+            const { data: rawRentals, error: rError } = await supabase
                 .from("alquileres")
                 .select("vivienda_id, precio_bruto, precio_neto, comision_valor, fecha_entrada, fecha_salida")
-                .gte("fecha_entrada", startDate)
                 .lte("fecha_entrada", endDate)
+                .gte("fecha_salida", startDate)
                 .in("plataforma_id", selectedPlatIds);
 
             if (rError) throw rError;
+            
+            const rentals = splitRentals(rawRentals || []).filter((r: any) => 
+                r.fecha_entrada >= startDate && r.fecha_entrada <= endDate
+            );
 
             // 2. Fetch Expenses and Categories
             const { data: expenses, error: eError } = await supabase

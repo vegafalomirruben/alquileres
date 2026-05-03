@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { splitRentals } from "@/lib/rentalSplitter";
 
 // Helper for multi-select pills
 const MultiToggle = ({ options, selected, onToggle, onSelectAll, onDeselectAll, label, icon: Icon }: any) => (
@@ -90,9 +91,10 @@ export default function ChartsPage() {
             ]);
 
             if (rData) {
-                setRentals(rData);
+                const splitData = splitRentals(rData);
+                setRentals(splitData);
                 // Initialize years
-                const years = Array.from(new Set(rData.map(r => r.fecha_entrada ? new Date(r.fecha_entrada).getFullYear().toString() : null).filter(Boolean)));
+                const years = Array.from(new Set(splitData.map(r => r.fecha_entrada ? new Date(r.fecha_entrada).getFullYear().toString() : null).filter(Boolean)));
                 setSelectedYears(years as string[]);
             }
             if (eData) setExpenses(eData);

@@ -10,6 +10,7 @@ import { es } from "date-fns/locale";
 import { TrendingUp, Wallet, ArrowDown, LayoutDashboard, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { PlatformLogo } from "@/components/platform-logo";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { splitRentals } from "@/lib/rentalSplitter";
 
 const MESES = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -38,11 +39,12 @@ export default function DashboardsPage() {
             const { data: viviendasData } = await supabase.from("viviendas").select("*");
 
             if (rentalsData) {
-                setRentals(rentalsData);
+                const splitData = splitRentals(rentalsData);
+                setRentals(splitData);
                 if (expensesData) setExpenses(expensesData);
                 if (viviendasData) setViviendas(viviendasData);
 
-                const rentalsYears = rentalsData.map(r => getYear(parseISO(r.fecha_entrada)));
+                const rentalsYears = splitData.map(r => getYear(parseISO(r.fecha_entrada)));
                 const expensesYears = (expensesData || []).map(e => getYear(parseISO(e.fecha)));
                 const uniqueYears = Array.from(new Set([...rentalsYears, ...expensesYears])).sort((a, b) => b - a);
                 setYears(uniqueYears.length > 0 ? uniqueYears : [new Date().getFullYear()]);
