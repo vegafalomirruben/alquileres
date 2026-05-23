@@ -21,12 +21,78 @@ export async function getUpcomingEvents(): Promise<{ events: CalendarEvent[], lo
         logs.push(`[${timestamp}] ${msg}`);
     };
 
-    log("--- Inicia proceso de sincronización (v3 - ICAL.js) ---");
+    log("--- Inicia proceso de sincronización (v4 - ICAL.js con Cancelaciones) ---");
 
-    // 1. Fetch all rentals (past and future) to show in annual view
-    const { data: rentals } = await supabase
+    // 1. Fetch all properties to check their links
+    const { data: viviendas, error: vError } = await supabase
+        .from("viviendas")
+        .select("*");
+
+    if (vError) {
+        log(`Error fetching viviendas from DB: ${vError.message}`);
+    }
+    log(`Query returned ${viviendas?.length || 0} total properties from DB`);
+
+    const icalEvents: CalendarEvent[] = [];
+    const successfulFeeds: { vivienda_id: string; source: "airbnb" | "booking"; eventUids: Set<string> }[] = [];
+
+    if (viviendas) {
+        for (const v of viviendas) {
+            log(`Checking property: ${v.nombre} (Airbnb: ${v.ical_airbnb ? 'YES' : 'NO'}, Booking: ${v.ical_booking ? 'YES' : 'NO'})`);
+            
+            // Airbnb
+            if (v.ical_airbnb && v.ical_airbnb.trim() !== "") {
+                log(`Fetching Airbnb iCal for ${v.nombre}...`);
+                const { events: airbnbEvents, logs: fetchLogs, success } = await fetchAndParseIcal(v.ical_airbnb, "airbnb", v.nombre);
+                logs.push(...fetchLogs);
+                if (success) {
+                    log(`Found ${airbnbEvents.length} upcoming events for Airbnb/${v.nombre}`);
+                    icalEvents.push(...airbnbEvents);
+                    successfulFeeds.push({
+                        vivienda_id: v.id,
+                        source: "airbnb",
+                        eventUids: new Set(airbnbEvents.map(e => e.id))
+                    });
+                } else {
+                    log(`Skipped sync/cancellation check for Airbnb/${v.nombre} due to fetch/parse failure`);
+                }
+            }
+            
+            // Booking
+            if (v.ical_booking && v.ical_booking.trim() !== "") {
+                log(`Fetching Booking iCal for ${v.nombre}...`);
+                const { events: bookingEvents, logs: fetchLogs, success } = await fetchAndParseIcal(v.ical_booking, "booking", v.nombre);
+                logs.push(...fetchLogs);
+                if (success) {
+                    log(`Found ${bookingEvents.length} upcoming events for Booking/${v.nombre}`);
+                    icalEvents.push(...bookingEvents);
+                    successfulFeeds.push({
+                        vivienda_id: v.id,
+                        source: "booking",
+                        eventUids: new Set(bookingEvents.map(e => e.id))
+                    });
+                } else {
+                    log(`Skipped sync/cancellation check for Booking/${v.nombre} due to fetch/parse failure`);
+                }
+            }
+        }
+    }
+
+    // 2. Sync to DB: Inserts new bookings and deletes cancelled future ones
+    try {
+        await syncIcalToAlquileres(icalEvents, viviendas || [], successfulFeeds, log);
+    } catch (e: any) {
+        log(`Error in auto-sync: ${e.message}`);
+    }
+
+    // 3. Fetch all rentals from DB (now updated with inserts and deletes)
+    const { data: rentals, error: rError } = await supabase
         .from("alquileres")
         .select("*, viviendas(nombre), plataformas(nombre)");
+
+    if (rError) {
+        log(`Error fetching rentals from DB after sync: ${rError.message}`);
+    }
 
     const manualEvents: CalendarEvent[] = (rentals || [])
         .map((r: any) => {
@@ -48,78 +114,84 @@ export async function getUpcomingEvents(): Promise<{ events: CalendarEvent[], lo
             };
         });
 
-    log(`Manual event count: ${manualEvents.length}`);
+    log(`Total database events fetched: ${manualEvents.length}`);
 
-    // 2. Fetch all properties to check their links
-    const { data: viviendas, error: vError } = await supabase
-        .from("viviendas")
-        .select("*");
-
-    if (vError) {
-        log(`Error fetching viviendas from DB: ${vError.message}`);
-    }
-    log(`Query returned ${viviendas?.length || 0} total properties from DB`);
-
-    const icalEvents: CalendarEvent[] = [];
-
-    if (viviendas) {
-        for (const v of viviendas) {
-            log(`Checking property: ${v.nombre} (Airbnb: ${v.ical_airbnb ? 'YES' : 'NO'}, Booking: ${v.ical_booking ? 'YES' : 'NO'})`);
-            // Airbnb
-            if (v.ical_airbnb && v.ical_airbnb.trim() !== "") {
-                try {
-                    log(`Fetching Airbnb iCal for ${v.nombre}...`);
-                    const { events: airbnbEvents, logs: fetchLogs } = await fetchAndParseIcal(v.ical_airbnb, "airbnb", v.nombre);
-                    logs.push(...fetchLogs);
-                    log(`Found ${airbnbEvents.length} upcoming events for Airbnb/${v.nombre}`);
-                    icalEvents.push(...airbnbEvents);
-                } catch (e: any) {
-                    log(`Error fetching Airbnb iCal for ${v.nombre}: ${e.message}`);
-                }
-            }
-            // Booking
-            if (v.ical_booking && v.ical_booking.trim() !== "") {
-                try {
-                    log(`Fetching Booking iCal for ${v.nombre}...`);
-                    const { events: bookingEvents, logs: fetchLogs } = await fetchAndParseIcal(v.ical_booking, "booking", v.nombre);
-                    logs.push(...fetchLogs);
-                    log(`Found ${bookingEvents.length} upcoming events for Booking/${v.nombre}`);
-                    icalEvents.push(...bookingEvents);
-                } catch (e: any) {
-                    log(`Error fetching Booking iCal for ${v.nombre}: ${e.message}`);
-                }
-            }
-        }
-    }
-
-    // Merge and sort: Include all DB events and add only iCal events that aren't in DB yet
+    // Merge in-memory icalEvents as a fallback in case DB write failed
     const dbIds = new Set(manualEvents.map(e => e.id));
     const uniqueIcalEvents = icalEvents.filter(ev => !dbIds.has(ev.id));
 
     const allEvents = [...manualEvents, ...uniqueIcalEvents].sort((a, b) => a.start.getTime() - b.start.getTime());
-    log(`Total events to return: ${allEvents.length} (${manualEvents.length} from DB, ${uniqueIcalEvents.length} new from iCal)`);
-
-    // Trigger background sync to Alquileres table
-    try {
-        await syncIcalToAlquileres(icalEvents, viviendas || [], log);
-    } catch (e: any) {
-        log(`Error in auto-sync: ${e.message}`);
-    }
+    log(`Total events to return: ${allEvents.length} (${manualEvents.length} from DB, ${uniqueIcalEvents.length} fallback in-memory)`);
 
     return { events: allEvents, logs, viviendas: viviendas || [] };
 }
 
-async function syncIcalToAlquileres(icalEvents: CalendarEvent[], viviendas: any[], log: (msg: string) => void) {
-    if (icalEvents.length === 0) return;
-
-    // 1. Get existing ical_uids to avoid duplicates
-    const { data: existing } = await supabase.from("alquileres").select("ical_uid").not("ical_uid", "is", null);
-    const existingUids = new Set((existing || []).map(r => r.ical_uid));
-
-    // 2. Fetch platforms to map names to IDs
+async function syncIcalToAlquileres(
+    icalEvents: CalendarEvent[], 
+    viviendas: any[], 
+    successfulFeeds: { vivienda_id: string; source: "airbnb" | "booking"; eventUids: Set<string> }[],
+    log: (msg: string) => void
+) {
+    // 1. Fetch platforms to map names to IDs
     const { data: plataformas } = await supabase.from("plataformas").select("*");
     const airbnbPlat = plataformas?.find(p => p.nombre.toLowerCase().includes("airbnb"));
     const bookingPlat = plataformas?.find(p => p.nombre.toLowerCase().includes("booking"));
+
+    // --- PART A: Handle cancellations (deletions) ---
+    const todayStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
+    for (const feed of successfulFeeds) {
+        const plat = feed.source === "airbnb" ? airbnbPlat : bookingPlat;
+        if (!plat) continue;
+
+        // Query future bookings in the DB for this property and platform that have an ical_uid
+        const { data: dbBookings, error: dbErr } = await supabase
+            .from("alquileres")
+            .select("id, ical_uid, fecha_entrada, fecha_salida")
+            .eq("vivienda_id", feed.vivienda_id)
+            .eq("plataforma_id", plat.id)
+            .not("ical_uid", "is", null)
+            .gte("fecha_salida", todayStr); // Only check bookings ending today or in the future
+
+        if (dbErr) {
+            log(`Error fetching bookings for cancellation check (${feed.source}): ${dbErr.message}`);
+            continue;
+        }
+
+        if (!dbBookings || dbBookings.length === 0) continue;
+
+        // Identify bookings in the DB that are NOT in the active feed
+        const uidsToDelete: string[] = [];
+        const idsToDelete: string[] = [];
+
+        for (const b of dbBookings) {
+            if (b.ical_uid && !feed.eventUids.has(b.ical_uid)) {
+                uidsToDelete.push(b.ical_uid);
+                idsToDelete.push(b.id);
+            }
+        }
+
+        if (idsToDelete.length > 0) {
+            log(`Detected ${idsToDelete.length} cancelled bookings in ${feed.source} feed: ${uidsToDelete.join(", ")}. Deleting from DB...`);
+            const { error: delErr } = await supabase
+                .from("alquileres")
+                .delete()
+                .in("id", idsToDelete);
+
+            if (delErr) {
+                log(`Error deleting cancelled bookings: ${delErr.message}`);
+            } else {
+                log(`Successfully deleted ${idsToDelete.length} cancelled bookings.`);
+            }
+        }
+    }
+
+    // --- PART B: Insert new bookings ---
+    if (icalEvents.length === 0) return;
+
+    // Get existing ical_uids to avoid duplicates
+    const { data: existing } = await supabase.from("alquileres").select("ical_uid").not("ical_uid", "is", null);
+    const existingUids = new Set((existing || []).map(r => r.ical_uid));
 
     const newBookings = [];
 
@@ -157,9 +229,10 @@ async function syncIcalToAlquileres(icalEvents: CalendarEvent[], viviendas: any[
     }
 }
 
-async function fetchAndParseIcal(url: string, source: "airbnb" | "booking", viviendaName: string): Promise<{ events: CalendarEvent[], logs: string[] }> {
+async function fetchAndParseIcal(url: string, source: "airbnb" | "booking", viviendaName: string): Promise<{ events: CalendarEvent[], logs: string[], success: boolean }> {
     const events: CalendarEvent[] = [];
     const logs: string[] = [];
+    let success = true;
     const log = (msg: string) => {
         console.log(msg);
         logs.push(msg);
@@ -204,6 +277,7 @@ async function fetchAndParseIcal(url: string, source: "airbnb" | "booking", vivi
         log(`Parsed ${count} total events from ${source} feed, ${events.length} passed filter.`);
     } catch (err: any) {
         log(`Failed to parse ${source} iCal from ${url}: ${err.message}`);
+        success = false;
     }
-    return { events, logs };
+    return { events, logs, success };
 }

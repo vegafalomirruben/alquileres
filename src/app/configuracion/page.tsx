@@ -21,6 +21,8 @@ export default function ConfigPage() {
         direccion: string,
         ical_airbnb?: string,
         ical_booking?: string,
+        url_airbnb?: string,
+        url_booking?: string,
         ref_catastral?: string,
         licencia_turistica?: string,
         nrua?: string,
@@ -34,6 +36,8 @@ export default function ConfigPage() {
         direccion: "",
         ical_airbnb: "",
         ical_booking: "",
+        url_airbnb: "",
+        url_booking: "",
         ref_catastral: "",
         licencia_turistica: "",
         nrua: "",
@@ -94,6 +98,8 @@ export default function ConfigPage() {
             direccion: v.direccion || "",
             ical_airbnb: v.ical_airbnb || "",
             ical_booking: v.ical_booking || "",
+            url_airbnb: v.url_airbnb || "",
+            url_booking: v.url_booking || "",
             ref_catastral: v.ref_catastral || "",
             licencia_turistica: v.licencia_turistica || "",
             nrua: v.nrua || "",
@@ -112,6 +118,8 @@ export default function ConfigPage() {
             direccion: "",
             ical_airbnb: "",
             ical_booking: "",
+            url_airbnb: "",
+            url_booking: "",
             ref_catastral: "",
             licencia_turistica: "",
             nrua: "",
@@ -268,6 +276,16 @@ export default function ConfigPage() {
                                 <div className="grid gap-2">
                                     <Label htmlFor="ical-booking" className="text-xs text-muted-foreground">Booking.com Calendar Link (iCal)</Label>
                                     <Input id="ical-booking" placeholder="https://admin.booking.com/hotel/hoteladmin/ical..." value={newVivienda.ical_booking || ""} onChange={e => setNewVivienda({ ...newVivienda, ical_booking: e.target.value })} className="font-mono text-xs" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="url-airbnb" className="text-xs text-muted-foreground">URL Anuncio Airbnb (Pública)</Label>
+                                    <Input id="url-airbnb" placeholder="https://www.airbnb.es/rooms/..." value={newVivienda.url_airbnb || ""} onChange={e => setNewVivienda({ ...newVivienda, url_airbnb: e.target.value })} className="font-mono text-xs" />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="url-booking" className="text-xs text-muted-foreground">URL Anuncio Booking (Pública)</Label>
+                                    <Input id="url-booking" placeholder="https://www.booking.com/hotel/..." value={newVivienda.url_booking || ""} onChange={e => setNewVivienda({ ...newVivienda, url_booking: e.target.value })} className="font-mono text-xs" />
                                 </div>
                             </div>
                             <div className="flex gap-2 justify-end">

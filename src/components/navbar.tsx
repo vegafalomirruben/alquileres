@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, Building2, CreditCard, LayoutDashboard, Settings, Calendar as CalendarIcon, Menu, X, Users, LogOut, ShieldCheck, BarChart3, FileText } from "lucide-react";
+import { Home, Building2, CreditCard, LayoutDashboard, Settings, Calendar as CalendarIcon, Menu, X, Users, LogOut, ShieldCheck, BarChart3, FileText, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -25,6 +25,7 @@ export function Navbar() {
         { href: "/usuarios", label: "Usuarios", icon: Users },
         { href: "/configuracion", label: "Ajustes", icon: Settings },
         { href: "/tramites", label: "Trámites", icon: FileText },
+        { href: "/comparativa", label: "Comparativa", icon: Scale },
     ];
 
     const handleLogout = () => {
