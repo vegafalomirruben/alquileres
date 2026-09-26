@@ -3,8 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import { Navbar } from "@/components/navbar";
 import { AuthProvider } from "@/components/auth-provider";
+import { AppShell } from "@/components/app-shell";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -28,19 +28,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <div className="flex min-h-screen flex-col">
-              <Navbar />
-              <main className="flex-1 container py-4 sm:py-8">
-                {children}
-              </main>
-              <footer className="border-t py-6 bg-muted/50">
-                <div className="container flex flex-col items-center justify-between gap-4 md:h-24 md:flex-row">
-                  <p className="text-sm text-muted-foreground">
-                    &copy; {new Date().getFullYear()} Gestión Alquileres Pro. Todos los derechos reservados.
-                  </p>
-                </div>
-              </footer>
-            </div>
+            <AppShell>
+              {children}
+            </AppShell>
           </AuthProvider>
           <Toaster position="top-right" />
         </ThemeProvider>

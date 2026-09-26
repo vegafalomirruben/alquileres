@@ -12,8 +12,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const session = localStorage.getItem("user_session");
         const isLoginPage = pathname === "/login";
+        const isPublicPage = isLoginPage || pathname?.startsWith("/checkin");
 
-        if (!session && !isLoginPage) {
+        if (!session && !isPublicPage) {
             router.push("/login");
         } else if (session && isLoginPage) {
             router.push("/dashboard");

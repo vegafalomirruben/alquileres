@@ -30,7 +30,10 @@ export default function ConfigPage() {
         valor_suelo?: number,
         superficie_construida?: number,
         valor_catastral_construccion?: number,
-        valor_catastral_total?: number
+        valor_catastral_total?: number,
+        codigo_establecimiento_ses?: string,
+        nif_titular?: string,
+        nombre_titular?: string
     }>({
         nombre: "",
         direccion: "",
@@ -45,7 +48,10 @@ export default function ConfigPage() {
         valor_suelo: 0,
         superficie_construida: 0,
         valor_catastral_construccion: 0,
-        valor_catastral_total: 0
+        valor_catastral_total: 0,
+        codigo_establecimiento_ses: "",
+        nif_titular: "",
+        nombre_titular: ""
     });
     const [newPlataforma, setNewPlataforma] = useState({ nombre: "", comision_porcentaje: 0 });
     const [newCategoria, setNewCategoria] = useState({ nombre: "" });
@@ -108,6 +114,9 @@ export default function ConfigPage() {
             superficie_construida: v.superficie_construida || 0,
             valor_catastral_construccion: v.valor_catastral_construccion || 0,
             valor_catastral_total: v.valor_catastral_total || 0,
+            codigo_establecimiento_ses: v.codigo_establecimiento_ses || "",
+            nif_titular: v.nif_titular || "",
+            nombre_titular: v.nombre_titular || ""
         });
     }
 
@@ -128,6 +137,9 @@ export default function ConfigPage() {
             superficie_construida: 0,
             valor_catastral_construccion: 0,
             valor_catastral_total: 0,
+            codigo_establecimiento_ses: "",
+            nif_titular: "",
+            nombre_titular: ""
         });
     }
 
@@ -276,6 +288,22 @@ export default function ConfigPage() {
                                 <div className="grid gap-2">
                                     <Label htmlFor="ical-booking" className="text-xs text-muted-foreground">Booking.com Calendar Link (iCal)</Label>
                                     <Input id="ical-booking" placeholder="https://admin.booking.com/hotel/hoteladmin/ical..." value={newVivienda.ical_booking || ""} onChange={e => setNewVivienda({ ...newVivienda, ical_booking: e.target.value })} className="font-mono text-xs" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4 p-3 bg-muted/30 rounded-xl border border-primary/10">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-ses" className="text-xs font-bold text-primary flex items-center gap-1">
+                                        Cód. SES.HOSPEDAJES (Policía)
+                                    </Label>
+                                    <Input id="vivienda-ses" placeholder="Ej: EST-123456" value={newVivienda.codigo_establecimiento_ses || ""} onChange={e => setNewVivienda({ ...newVivienda, codigo_establecimiento_ses: e.target.value })} className="font-mono text-xs" />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-titular-nif" className="text-xs font-bold text-muted-foreground">NIF/CIF Titular (Arrendador)</Label>
+                                    <Input id="vivienda-titular-nif" placeholder="Ej: 12345678Z" value={newVivienda.nif_titular || ""} onChange={e => setNewVivienda({ ...newVivienda, nif_titular: e.target.value })} className="text-xs" />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vivienda-titular-nombre" className="text-xs font-bold text-muted-foreground">Nombre / Razón Social Titular</Label>
+                                    <Input id="vivienda-titular-nombre" placeholder="Ej: Ruben Vega" value={newVivienda.nombre_titular || ""} onChange={e => setNewVivienda({ ...newVivienda, nombre_titular: e.target.value })} className="text-xs" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">

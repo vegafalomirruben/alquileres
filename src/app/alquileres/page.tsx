@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, Download, Calculator, Pencil, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, FileText } from "lucide-react";
+import Link from "next/link";
+import { Plus, Trash2, Download, Calculator, Pencil, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, FileText, ShieldCheck, Share2, Copy, MessageCircle } from "lucide-react";
 import { addDays, differenceInDays, format, parseISO, startOfDay } from "date-fns";
 import { PlatformLogo } from "@/components/platform-logo";
 import { es } from "date-fns/locale";
@@ -53,6 +54,10 @@ export default function RentalsPage() {
         direccion: "",
         fecha_recibo: format(new Date(), "yyyy-MM-dd")
     });
+
+    // Check-in Dialog state
+    const [isCheckinModalOpen, setIsCheckinModalOpen] = useState(false);
+    const [activeRentalForCheckin, setActiveRentalForCheckin] = useState<any>(null);
 
     useEffect(() => {
         fetchData();
@@ -310,6 +315,28 @@ export default function RentalsPage() {
         }));
         setIsReceiptModalOpen(true);
     }
+
+    const getCheckinUrl = (rentalId: string) => {
+        if (typeof window === "undefined") return "";
+        return `${window.location.origin}/checkin/${rentalId}`;
+    };
+
+    const copyCheckinLink = (rental: any) => {
+        const url = getCheckinUrl(rental.id);
+        navigator.clipboard.writeText(url);
+        toast.success("Enlace de check-in copiado al portapapeles");
+    };
+
+    const sendWhatsAppCheckin = (rental: any) => {
+        const url = getCheckinUrl(rental.id);
+        const text = `¡Hola! 👋 Para preparar tu llegada a ${rental.viviendas?.nombre || "la vivienda"}, por favor completa el registro obligatorio de viajeros en este enlace seguro:\n${url}\n¡Muchas gracias!`;
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
+    };
+
+    const openCheckinModal = (rental: any) => {
+        setActiveRentalForCheckin(rental);
+        setIsCheckinModalOpen(true);
+    };
 
     function generatePDF() {
         if (!activeRentalForReceipt) return;
@@ -697,8 +724,12 @@ export default function RentalsPage() {
                                     <TableCell>{r.fecha_peticion ? format(parseISO(r.fecha_peticion), "dd/MM/yyyy") : "-"}</TableCell>
                                     <TableCell>{r.dias_antelacion != null ? `${r.dias_antelacion}d` : "-"}</TableCell>
                                     <TableCell className="max-w-[150px] truncate" title={r.comentarios}>{r.comentarios}</TableCell>
-                                    <TableCell className="flex gap-2">
+                                    <TableCell className="flex gap-1.5">
                                         <Button variant="ghost" size="icon" onClick={() => openReceiptModal(r)} title="Generar Recibo"><FileText className="h-4 w-4 text-emerald-600" /></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => openCheckinModal(r)} title="Compartir Check-in Online (WhatsApp/Enlace)"><Share2 className="h-4 w-4 text-indigo-500" /></Button>
+                                        <Link href="/tramites">
+                                            <Button variant="ghost" size="icon" title="Parte de Viajeros (SES.HOSPEDAJES / Policía)"><ShieldCheck className="h-4 w-4 text-indigo-600" /></Button>
+                                        </Link>
                                         <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4 text-blue-500" /></Button>
                                         <Button variant="ghost" size="icon" onClick={() => deleteRental(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                     </TableCell>
@@ -715,6 +746,65 @@ export default function RentalsPage() {
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Check-in Share Modal */}
+            <Dialog open={isCheckinModalOpen} onOpenChange={setIsCheckinModalOpen}>
+                <DialogContent className="sm:max-w-[480px] rounded-3xl p-6">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-extrabold flex items-center gap-2 text-indigo-600">
+                            <Share2 className="h-5 w-5" />
+                            Check-in Online de Huéspedes
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {activeRentalForCheckin && (
+                        <div className="space-y-4 py-3 text-xs">
+                            <div className="p-3.5 bg-muted/40 rounded-2xl border border-primary/10 space-y-1">
+                                <p className="font-bold text-sm text-foreground">{activeRentalForCheckin.viviendas?.nombre}</p>
+                                <p className="text-muted-foreground">
+                                    Estancia del {format(parseISO(activeRentalForCheckin.fecha_entrada), "d 'de' MMMM", { locale: es })} al {format(parseISO(activeRentalForCheckin.fecha_salida), "d 'de' MMMM yyyy", { locale: es })}
+                                </p>
+                            </div>
+
+                            <p className="text-muted-foreground leading-relaxed">
+                                Envía este enlace a tus huéspedes para que completen sus datos y su firma antes de llegar:
+                            </p>
+
+                            <div className="flex gap-2 items-center">
+                                <Input
+                                    readOnly
+                                    value={getCheckinUrl(activeRentalForCheckin.id)}
+                                    className="font-mono text-[11px] bg-muted/30"
+                                />
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => copyCheckinLink(activeRentalForCheckin)}
+                                    className="font-bold text-xs shrink-0"
+                                >
+                                    <Copy className="h-3.5 w-3.5 mr-1" /> Copiar
+                                </Button>
+                            </div>
+
+                            <div className="pt-2 flex flex-col gap-2">
+                                <Button
+                                    onClick={() => sendWhatsAppCheckin(activeRentalForCheckin)}
+                                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black h-12 rounded-2xl shadow-lg shadow-emerald-600/20 text-sm flex items-center justify-center gap-2"
+                                >
+                                    <MessageCircle className="h-5 w-5" /> Enviar por WhatsApp al Huésped
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => window.open(getCheckinUrl(activeRentalForCheckin.id), "_blank")}
+                                    className="w-full text-xs text-muted-foreground"
+                                >
+                                    Abrir formulario en nueva pestaña
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             {/* Receipt Modal */}
             <Dialog open={isReceiptModalOpen} onOpenChange={setIsReceiptModalOpen}>

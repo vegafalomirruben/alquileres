@@ -14,7 +14,7 @@ export function Navbar() {
     const pathname = usePathname();
     const router = useRouter();
 
-    if (pathname === "/login") return null;
+    if (pathname === "/login" || pathname?.startsWith("/checkin")) return null;
 
     const navLinks = [
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
