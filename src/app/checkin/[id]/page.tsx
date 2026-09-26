@@ -12,7 +12,7 @@ import { SignaturePad } from "@/components/signature-pad";
 import { toast } from "sonner";
 import {
     ShieldCheck, UserPlus, Trash2, CheckCircle2, Calendar, MapPin,
-    AlertCircle, Sparkles, Building2, User
+    AlertCircle, Sparkles, UserCheck, Users
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
@@ -57,6 +57,7 @@ export default function CheckinPage() {
 
     const [rental, setRental] = useState<any>(null);
     const [vivienda, setVivienda] = useState<any>(null);
+    const [existingGuests, setExistingGuests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitted, setSubmitted] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -72,6 +73,7 @@ export default function CheckinPage() {
 
     async function loadData() {
         setLoading(true);
+
         // 1. Try finding by rental ID
         const { data: rData } = await supabase
             .from("alquileres")
@@ -82,6 +84,19 @@ export default function CheckinPage() {
         if (rData) {
             setRental(rData);
             setVivienda(rData.viviendas);
+
+            // Fetch already registered guests for this rental
+            const { data: existing } = await supabase
+                .from("viajeros")
+                .select("id, nombre, primer_apellido, segundo_apellido, parentesco, created_at")
+                .eq("alquiler_id", id)
+                .order("created_at", { ascending: true });
+
+            if (existing && existing.length > 0) {
+                setExistingGuests(existing);
+                // Si ya hay titular, el siguiente por defecto es ACOMPAÑANTE
+                setGuests([{ ...emptyGuest, parentesco: "ACOMPAÑANTE" }]);
+            }
         } else {
             // 2. Try finding by vivienda ID
             const { data: vData } = await supabase
@@ -114,7 +129,7 @@ export default function CheckinPage() {
 
     const removeGuest = (index: number) => {
         if (guests.length === 1) {
-            return toast.info("Debe haber al menos un huésped registrado.");
+            return toast.info("Debe haber al menos un huésped para registrar en este envío.");
         }
         setGuests(prev => prev.filter((_, i) => i !== index));
     };
@@ -161,7 +176,7 @@ export default function CheckinPage() {
                 lugar_residencia: g.lugar_residencia.trim() || null,
                 telefono: g.telefono.trim() || null,
                 email: g.email.trim() || null,
-                parentesco: g.parentesco || (index === 0 ? "TITULAR" : "ACOMPAÑANTE"),
+                parentesco: g.parentesco || (existingGuests.length === 0 && index === 0 ? "TITULAR" : "ACOMPAÑANTE"),
                 fecha_entrada: fechaEntrada,
                 fecha_salida: fechaSalida,
                 estado_ses: "PENDIENTE",
@@ -209,7 +224,10 @@ export default function CheckinPage() {
                         {rental && (
                             <p><strong>Estancia:</strong> {format(parseISO(rental.fecha_entrada), "d 'de' MMMM", { locale: es })} al {format(parseISO(rental.fecha_salida), "d 'de' MMMM yyyy", { locale: es })}</p>
                         )}
-                        <p><strong>Huéspedes registrados:</strong> {guests.length}</p>
+                        <p><strong>Huéspedes registrados en este envío:</strong> {guests.length}</p>
+                        {existingGuests.length > 0 && (
+                            <p><strong>Total en la reserva:</strong> {existingGuests.length + guests.length} personas</p>
+                        )}
                     </div>
                     <div className="flex items-center justify-center gap-2 text-indigo-400 text-xs font-bold">
                         <Sparkles className="h-4 w-4" /> ¡Te deseamos una feliz y cómoda estancia!
@@ -259,6 +277,34 @@ export default function CheckinPage() {
                     )}
                 </div>
 
+                {/* AVISO DE HUÉSPEDES YA REGISTRADOS ANTERIORMENTE */}
+                {existingGuests.length > 0 && (
+                    <div className="bg-emerald-950/40 border border-emerald-800/50 rounded-3xl p-5 shadow-lg space-y-3 animate-in fade-in duration-300">
+                        <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                            <CheckCircle2 className="h-5 w-5 shrink-0" />
+                            <span>Huéspedes ya confirmados en esta reserva ({existingGuests.length}):</span>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            {existingGuests.map((eg, idx) => (
+                                <div key={eg.id || idx} className="bg-slate-900/80 border border-slate-800 p-3 rounded-2xl flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <UserCheck className="h-4 w-4 text-emerald-400" />
+                                        <span className="font-bold text-white">
+                                            {eg.nombre} {eg.primer_apellido} {eg.segundo_apellido || ""}
+                                        </span>
+                                    </div>
+                                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-extrabold">
+                                        {eg.parentesco || "Confirmado"}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-snug">
+                            💡 Utiliza el siguiente formulario para añadir a los <strong>acompañantes restantes</strong> que faltan por registrarse.
+                        </p>
+                    </div>
+                )}
+
                 <div className="p-3.5 bg-slate-900/80 border border-slate-800 rounded-2xl flex items-start gap-3 text-xs text-slate-400">
                     <AlertCircle className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
                     <p className="leading-relaxed">
@@ -267,175 +313,180 @@ export default function CheckinPage() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {guests.map((g, index) => (
-                        <Card key={index} className="bg-slate-900 border-slate-800 shadow-xl rounded-3xl overflow-hidden">
-                            <CardHeader className="bg-slate-800/40 border-b border-slate-800/60 pb-4 flex flex-row items-center justify-between">
-                                <div className="flex items-center gap-2.5">
-                                    <div className="w-7 h-7 rounded-xl bg-indigo-500/20 text-indigo-400 font-black text-xs flex items-center justify-center">
-                                        #{index + 1}
-                                    </div>
-                                    <CardTitle className="text-base font-bold text-white">
-                                        {index === 0 ? "Huésped Principal (Titular)" : `Acompañante #${index + 1}`}
-                                    </CardTitle>
-                                </div>
-                                {index > 0 && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => removeGuest(index)}
-                                        className="h-8 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 gap-1 text-xs"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" /> Eliminar
-                                    </Button>
-                                )}
-                            </CardHeader>
+                    {guests.map((g, index) => {
+                        const guestNumber = existingGuests.length + index + 1;
+                        const isFirstEver = existingGuests.length === 0 && index === 0;
 
-                            <CardContent className="p-5 space-y-4 text-xs">
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Nombre *</Label>
-                                        <Input
-                                            placeholder="Ej: Laura"
-                                            value={g.nombre}
-                                            onChange={e => updateGuest(index, "nombre", e.target.value)}
-                                            className="bg-slate-950 border-slate-800 text-white"
-                                            required
-                                        />
+                        return (
+                            <Card key={index} className="bg-slate-900 border-slate-800 shadow-xl rounded-3xl overflow-hidden">
+                                <CardHeader className="bg-slate-800/40 border-b border-slate-800/60 pb-4 flex flex-row items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-7 h-7 rounded-xl bg-indigo-500/20 text-indigo-400 font-black text-xs flex items-center justify-center">
+                                            #{guestNumber}
+                                        </div>
+                                        <CardTitle className="text-base font-bold text-white">
+                                            {isFirstEver ? "Huésped Principal (Titular)" : `Acompañante #${guestNumber}`}
+                                        </CardTitle>
                                     </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Primer Apellido *</Label>
-                                        <Input
-                                            placeholder="Ej: Gómez"
-                                            value={g.primer_apellido}
-                                            onChange={e => updateGuest(index, "primer_apellido", e.target.value)}
-                                            className="bg-slate-950 border-slate-800 text-white"
-                                            required
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Segundo Apellido</Label>
-                                        <Input
-                                            placeholder="Ej: Navarro"
-                                            value={g.segundo_apellido}
-                                            onChange={e => updateGuest(index, "segundo_apellido", e.target.value)}
-                                            className="bg-slate-950 border-slate-800 text-white"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Tipo Documento *</Label>
-                                        <Select
-                                            value={g.tipo_documento}
-                                            onValueChange={v => updateGuest(index, "tipo_documento", v)}
+                                    {guests.length > 1 && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => removeGuest(index)}
+                                            className="h-8 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 gap-1 text-xs"
                                         >
-                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-white">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                                                <SelectItem value="DNI">DNI</SelectItem>
-                                                <SelectItem value="PASAPORTE">Pasaporte</SelectItem>
-                                                <SelectItem value="NIE">NIE</SelectItem>
-                                                <SelectItem value="OTRO">Otro</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Nº Documento *</Label>
-                                        <Input
-                                            placeholder="12345678Z"
-                                            value={g.numero_documento}
-                                            onChange={e => updateGuest(index, "numero_documento", e.target.value)}
-                                            className="bg-slate-950 border-slate-800 text-white font-mono uppercase"
-                                            required
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Nº Soporte</Label>
-                                        <Input
-                                            placeholder="Ej: AAA123456"
-                                            value={g.numero_soporte}
-                                            onChange={e => updateGuest(index, "numero_soporte", e.target.value)}
-                                            className="bg-slate-950 border-slate-800 text-white font-mono uppercase"
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Sexo *</Label>
-                                        <Select
-                                            value={g.sexo}
-                                            onValueChange={v => updateGuest(index, "sexo", v)}
-                                        >
-                                            <SelectTrigger className="bg-slate-950 border-slate-800 text-white">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                                                <SelectItem value="M">Masculino</SelectItem>
-                                                <SelectItem value="F">Femenino</SelectItem>
-                                                <SelectItem value="O">Otro</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
+                                            <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                                        </Button>
+                                    )}
+                                </CardHeader>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Nacionalidad *</Label>
-                                        <Input
-                                            placeholder="ESP / España"
-                                            value={g.nacionalidad}
-                                            onChange={e => updateGuest(index, "nacionalidad", e.target.value)}
-                                            className="bg-slate-950 border-slate-800 text-white uppercase"
-                                            required
-                                        />
+                                <CardContent className="p-5 space-y-4 text-xs">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Nombre *</Label>
+                                            <Input
+                                                placeholder="Ej: Laura"
+                                                value={g.nombre}
+                                                onChange={e => updateGuest(index, "nombre", e.target.value)}
+                                                className="bg-slate-950 border-slate-800 text-white"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Primer Apellido *</Label>
+                                            <Input
+                                                placeholder="Ej: Gómez"
+                                                value={g.primer_apellido}
+                                                onChange={e => updateGuest(index, "primer_apellido", e.target.value)}
+                                                className="bg-slate-950 border-slate-800 text-white"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Segundo Apellido</Label>
+                                            <Input
+                                                placeholder="Ej: Navarro"
+                                                value={g.segundo_apellido}
+                                                onChange={e => updateGuest(index, "segundo_apellido", e.target.value)}
+                                                className="bg-slate-950 border-slate-800 text-white"
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Fecha Nacimiento *</Label>
-                                        <Input
-                                            type="date"
-                                            value={g.fecha_nacimiento}
-                                            onChange={e => updateGuest(index, "fecha_nacimiento", e.target.value)}
-                                            className="bg-slate-950 border-slate-800 text-white"
-                                            required
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Lugar Residencia</Label>
-                                        <Input
-                                            placeholder="Ciudad, País"
-                                            value={g.lugar_residencia}
-                                            onChange={e => updateGuest(index, "lugar_residencia", e.target.value)}
-                                            className="bg-slate-950 border-slate-800 text-white"
-                                        />
-                                    </div>
-                                </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Teléfono Móvil</Label>
-                                        <Input
-                                            type="tel"
-                                            placeholder="+34 600000000"
-                                            value={g.telefono}
-                                            onChange={e => updateGuest(index, "telefono", e.target.value)}
-                                            className="bg-slate-950 border-slate-800 text-white"
-                                        />
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Tipo Documento *</Label>
+                                            <Select
+                                                value={g.tipo_documento}
+                                                onValueChange={v => updateGuest(index, "tipo_documento", v)}
+                                            >
+                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                                                    <SelectItem value="DNI">DNI</SelectItem>
+                                                    <SelectItem value="PASAPORTE">Pasaporte</SelectItem>
+                                                    <SelectItem value="NIE">NIE</SelectItem>
+                                                    <SelectItem value="OTRO">Otro</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Nº Documento *</Label>
+                                            <Input
+                                                placeholder="12345678Z"
+                                                value={g.numero_documento}
+                                                onChange={e => updateGuest(index, "numero_documento", e.target.value)}
+                                                className="bg-slate-950 border-slate-800 text-white font-mono uppercase"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Nº Soporte</Label>
+                                            <Input
+                                                placeholder="Ej: AAA123456"
+                                                value={g.numero_soporte}
+                                                onChange={e => updateGuest(index, "numero_soporte", e.target.value)}
+                                                className="bg-slate-950 border-slate-800 text-white font-mono uppercase"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Sexo *</Label>
+                                            <Select
+                                                value={g.sexo}
+                                                onValueChange={v => updateGuest(index, "sexo", v)}
+                                            >
+                                                <SelectTrigger className="bg-slate-950 border-slate-800 text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                                                    <SelectItem value="M">Masculino</SelectItem>
+                                                    <SelectItem value="F">Femenino</SelectItem>
+                                                    <SelectItem value="O">Otro</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-slate-300">Email</Label>
-                                        <Input
-                                            type="email"
-                                            placeholder="email@ejemplo.com"
-                                            value={g.email}
-                                            onChange={e => updateGuest(index, "email", e.target.value)}
-                                            className="bg-slate-950 border-slate-800 text-white"
-                                        />
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Nacionalidad *</Label>
+                                            <Input
+                                                placeholder="ESP / España"
+                                                value={g.nacionalidad}
+                                                onChange={e => updateGuest(index, "nacionalidad", e.target.value)}
+                                                className="bg-slate-950 border-slate-800 text-white uppercase"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Fecha Nacimiento *</Label>
+                                            <Input
+                                                type="date"
+                                                value={g.fecha_nacimiento}
+                                                onChange={e => updateGuest(index, "fecha_nacimiento", e.target.value)}
+                                                className="bg-slate-950 border-slate-800 text-white"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Lugar Residencia</Label>
+                                            <Input
+                                                placeholder="Ciudad, País"
+                                                value={g.lugar_residencia}
+                                                onChange={e => updateGuest(index, "lugar_residencia", e.target.value)}
+                                                className="bg-slate-950 border-slate-800 text-white"
+                                            />
+                                        </div>
                                     </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Teléfono Móvil</Label>
+                                            <Input
+                                                type="tel"
+                                                placeholder="+34 600000000"
+                                                value={g.telefono}
+                                                onChange={e => updateGuest(index, "telefono", e.target.value)}
+                                                className="bg-slate-950 border-slate-800 text-white"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-slate-300">Email</Label>
+                                            <Input
+                                                type="email"
+                                                placeholder="email@ejemplo.com"
+                                                value={g.email}
+                                                onChange={e => updateGuest(index, "email", e.target.value)}
+                                                className="bg-slate-950 border-slate-800 text-white"
+                                            />
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
 
                     <Button
                         type="button"
@@ -443,14 +494,14 @@ export default function CheckinPage() {
                         onClick={addGuest}
                         className="w-full bg-slate-900 hover:bg-slate-800 text-indigo-400 border-slate-800 border-dashed h-12 rounded-2xl font-bold flex items-center justify-center gap-2"
                     >
-                        <UserPlus className="h-4 w-4" /> Añadir otro huésped / acompañante
+                        <UserPlus className="h-4 w-4" /> Añadir otro acompañante
                     </Button>
 
                     {/* SIGNATURE SECTION */}
                     <Card className="bg-slate-900 border-slate-800 shadow-xl rounded-3xl overflow-hidden p-6 space-y-4">
                         <div>
                             <CardTitle className="text-base font-bold text-white mb-1">
-                                Firma Digital del Huésped Titular
+                                Firma Digital de Conformidad
                             </CardTitle>
                             <CardDescription className="text-xs text-slate-400">
                                 Firma con el dedo o puntero para validar la conformidad del Parte de Entrada.
@@ -478,7 +529,7 @@ export default function CheckinPage() {
                         disabled={submitting}
                         className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black h-14 rounded-2xl shadow-xl shadow-indigo-600/30 text-base transition-transform active:scale-[0.99]"
                     >
-                        {submitting ? "Guardando Check-in..." : "Completar y Enviar Check-in"}
+                        {submitting ? "Guardando Check-in..." : "Completar y Enviar Registro"}
                     </Button>
                 </form>
             </div>
