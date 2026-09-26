@@ -328,15 +328,19 @@ export default function RentalsPage() {
         doc.setFont("helvetica", "normal");
         doc.text("Cami Omblanc 72 x", 15, 30);
 
-        // Date Info (Top Right Align)
+        // Number & Date Info (Top Right Align)
+        const receiptNumber = Math.floor(10000 + Math.random() * 90000);
+
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
-        doc.text("Fecha", 185, 28, { align: "right" });
-        doc.line(170, 30, 200, 30);
+        doc.text(`Número: ${receiptNumber}`, 185, 20, { align: "right" });
+
+        doc.text("Fecha", 185, 29, { align: "right" });
+        doc.line(170, 31, 200, 31);
         doc.setFont("helvetica", "normal");
         const formattedReceiptDate = format(parseISO(clientData.fecha_recibo), "dd/MM/yy");
-        doc.text(formattedReceiptDate, 185, 35, { align: "right" });
-        doc.line(170, 45, 200, 45);
+        doc.text(formattedReceiptDate, 185, 37, { align: "right" });
+        doc.line(170, 43, 200, 43);
 
         // Client Section
         doc.setFontSize(10);
@@ -364,7 +368,7 @@ export default function RentalsPage() {
                 ['', '', '', ''],
                 ['', '', '', ''],
                 ['', '', '', ''],
-                ['', '', '', ''],
+                ['IVA — operación exenta', '', '', '0.00'],
             ],
             theme: 'grid',
             headStyles: {
@@ -392,6 +396,14 @@ export default function RentalsPage() {
         doc.setFont("helvetica", "normal");
         doc.text(`${activeRentalForReceipt.precio_bruto.toFixed(2)}`, 195, finalY + 5, { align: "right" });
         doc.line(170, finalY + 7, 200, finalY + 7);
+
+        // Nota legal / Exención de IVA
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(100, 100, 100);
+        const legalNote = "Operación exenta de IVA en virtud de lo dispuesto en el artículo 20.Uno.23.º de la Ley 37/1992, de 28 de diciembre, del Impuesto sobre el Valor Añadido.";
+        const splitLegalNote = doc.splitTextToSize(legalNote, 180);
+        doc.text(splitLegalNote, 15, finalY + 25);
 
         // Footer Red Bar
         doc.setFillColor(redColor[0], redColor[1], redColor[2]);
