@@ -224,13 +224,25 @@ export default function TramitesPage() {
             nrua: primerInmueble.nrua
         };
 
-        downloadSESHospedajesJSON(listToExport, inmueble);
-        toast.success(`Fichero JSON oficial generado con ${listToExport.length} parte(s)`);
+        const primerViajero = listToExport[0];
+        const customFileName = selectedViajeros && selectedViajeros.length === 1
+            ? `ses_viajero_${primerViajero.primer_apellido || 'huesped'}_${format(new Date(), "yyyyMMdd")}.json`
+            : selectedViajeros
+            ? `ses_reserva_${primerViajero.primer_apellido || 'huesped'}_${format(new Date(), "yyyyMMdd")}.json`
+            : undefined;
+
+        downloadSESHospedajesJSON(listToExport, inmueble, customFileName);
+        toast.success(`Fichero JSON oficial generado (${listToExport.length} huésped/es)`);
     }
 
     async function handleTransmitirSES(v: any) {
         setIsSubmittingSES(true);
         try {
+            // Si el huésped está vinculado a una reserva, agrupamos a todos los acompañantes de la misma estancia
+            const grupoViajeros = v.alquiler_id
+                ? viajeros.filter(item => item.alquiler_id === v.alquiler_id)
+                : [v];
+
             const inmueble: InmuebleData = {
                 nombre: v.viviendas?.nombre || "Vivienda",
                 direccion: v.viviendas?.direccion,
@@ -244,7 +256,7 @@ export default function TramitesPage() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    viajeros: [v],
+                    viajeros: grupoViajeros,
                     inmueble
                 })
             });
@@ -252,16 +264,17 @@ export default function TramitesPage() {
             const data = await res.json();
 
             if (data.success) {
-                // Actualizar estado en la BD
+                const ids = grupoViajeros.map(item => item.id);
+                // Actualizar estado en la BD para todos los de la reserva
                 await supabase
                     .from("viajeros")
                     .update({
                         estado_ses: "REGISTRADO",
                         codigo_comunicacion_ses: data.codigoRegistro
                     })
-                    .eq("id", v.id);
+                    .in("id", ids);
 
-                toast.success(`Comunicación oficial completada. Acuse: ${data.codigoRegistro}`);
+                toast.success(`Comunicación completada (${grupoViajeros.length} huésped/es). Acuse: ${data.codigoRegistro}`);
                 fetchViajerosData();
             } else {
                 toast.error(`Error de validación: ${data.message}`);
@@ -656,6 +669,20 @@ export default function TramitesPage() {
                                                         title="Descargar Parte Oficial en PDF para firma"
                                                     >
                                                         <FileText className="h-3.5 w-3.5 mr-1" /> Parte PDF
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            const grupo = v.alquiler_id
+                                                                ? viajeros.filter(item => item.alquiler_id === v.alquiler_id)
+                                                                : [v];
+                                                            handleExportJSON(grupo);
+                                                        }}
+                                                        className="h-8 text-xs font-bold rounded-lg border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
+                                                        title="Descargar fichero JSON oficial (RD 933/2021) de esta estancia"
+                                                    >
+                                                        <FileDown className="h-3.5 w-3.5 mr-1" /> JSON
                                                     </Button>
                                                     <Button
                                                         size="sm"
