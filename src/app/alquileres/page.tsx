@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import Link from "next/link";
-import { Plus, Trash2, Download, Calculator, Pencil, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, FileText, ShieldCheck, Share2, Copy, MessageCircle } from "lucide-react";
+import { Plus, Trash2, Download, Calculator, Pencil, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown, FileText, ShieldCheck, Share2, Copy, MessageCircle, Send, CheckCircle2 } from "lucide-react";
 import { addDays, differenceInDays, format, parseISO, startOfDay } from "date-fns";
 import { PlatformLogo } from "@/components/platform-logo";
 import { es } from "date-fns/locale";
@@ -58,18 +58,89 @@ export default function RentalsPage() {
     // Check-in Dialog state
     const [isCheckinModalOpen, setIsCheckinModalOpen] = useState(false);
     const [activeRentalForCheckin, setActiveRentalForCheckin] = useState<any>(null);
+    const [viajerosByRental, setViajerosByRental] = useState<Record<string, any[]>>({});
+    const [transmittingRentalId, setTransmittingRentalId] = useState<string | null>(null);
 
     useEffect(() => {
         fetchData();
     }, []);
 
     async function fetchData() {
-        const { data: r } = await supabase.from("alquileres").select("*, viviendas(nombre), plataformas(nombre)").order("fecha_entrada", { ascending: false });
+        const { data: r } = await supabase.from("alquileres").select("*, viviendas(*), plataformas(nombre)").order("fecha_entrada", { ascending: false });
         const { data: v } = await supabase.from("viviendas").select("*");
         const { data: p } = await supabase.from("plataformas").select("*");
+        const { data: vi } = await supabase.from("viajeros").select("id, alquiler_id, estado_ses, nombre, primer_apellido, tipo_documento, numero_documento, fecha_nacimiento, nacionalidad, parentesco, fecha_entrada, fecha_salida");
+
         if (r) setRentals(r);
         if (v) setViviendas(v);
         if (p) setPlataformas(p);
+
+        if (vi) {
+            const map: Record<string, any[]> = {};
+            vi.forEach(item => {
+                if (item.alquiler_id) {
+                    if (!map[item.alquiler_id]) map[item.alquiler_id] = [];
+                    map[item.alquiler_id].push(item);
+                }
+            });
+            setViajerosByRental(map);
+        }
+    }
+
+    async function handleQuickTransmitSES(rental: any) {
+        const guests = viajerosByRental[rental.id] || [];
+        if (guests.length === 0) {
+            return toast.info("No hay huéspedes registrados en este alquiler todavía. Comparte el check-in online para que los huéspedes se registren.");
+        }
+
+        setTransmittingRentalId(rental.id);
+        try {
+            const viv = rental.viviendas || viviendas.find(v => v.id === rental.vivienda_id) || {};
+            const inmueble = {
+                nombre: viv.nombre || "Vivienda",
+                direccion: viv.direccion,
+                nif_titular: viv.nif_titular,
+                nombre_titular: viv.nombre_titular,
+                codigo_establecimiento_ses: viv.codigo_establecimiento_ses,
+                licencia_turistica: viv.licencia_turistica,
+                nrua: viv.nrua
+            };
+
+            const res = await fetch("/api/ses-hospedajes", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    viajeros: guests,
+                    inmueble,
+                    alquiler: rental
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                const ids = guests.map(g => g.id);
+                await supabase
+                    .from("viajeros")
+                    .update({
+                        estado_ses: "REGISTRADO",
+                        codigo_comunicacion_ses: data.codigoRegistro
+                    })
+                    .in("id", ids);
+
+                toast.success(`¡Alquiler comunicado con éxito a SES.HOSPEDAJES! (${guests.length} huésped/es). Acuse: ${data.codigoRegistro}`);
+                fetchData();
+            } else {
+                toast.error(`Error de validación: ${data.message}`);
+                if (data.errores && Array.isArray(data.errores)) {
+                    data.errores.forEach((err: string) => toast.error(err));
+                }
+            }
+        } catch (err: any) {
+            toast.error("Error al conectar con la pasarela SES: " + err.message);
+        } finally {
+            setTransmittingRentalId(null);
+        }
     }
 
     const filteredRentals = useMemo(() => {
@@ -724,14 +795,46 @@ export default function RentalsPage() {
                                     <TableCell>{r.fecha_peticion ? format(parseISO(r.fecha_peticion), "dd/MM/yyyy") : "-"}</TableCell>
                                     <TableCell>{r.dias_antelacion != null ? `${r.dias_antelacion}d` : "-"}</TableCell>
                                     <TableCell className="max-w-[150px] truncate" title={r.comentarios}>{r.comentarios}</TableCell>
-                                    <TableCell className="flex gap-1.5">
-                                        <Button variant="ghost" size="icon" onClick={() => openReceiptModal(r)} title="Generar Recibo"><FileText className="h-4 w-4 text-emerald-600" /></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => openCheckinModal(r)} title="Compartir Check-in Online (WhatsApp/Enlace)"><Share2 className="h-4 w-4 text-indigo-500" /></Button>
-                                        <Link href="/tramites">
-                                            <Button variant="ghost" size="icon" title="Parte de Viajeros (SES.HOSPEDAJES / Policía)"><ShieldCheck className="h-4 w-4 text-indigo-600" /></Button>
-                                        </Link>
-                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4 text-blue-500" /></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => deleteRental(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                    <TableCell className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                        {/* Botón rápido SES si hay huéspedes registrados */}
+                                        {(() => {
+                                            const guests = viajerosByRental[r.id] || [];
+                                            if (guests.length > 0) {
+                                                const allDone = guests.every(g => g.estado_ses === "REGISTRADO");
+                                                if (allDone) {
+                                                    return (
+                                                        <Link href="/tramites" title={`Comunicado a SES (${guests.length} huéspedes). Ver en Trámites`}>
+                                                            <Button size="sm" variant="outline" className="h-8 px-2 border-emerald-500/30 text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 font-bold text-xs rounded-xl flex items-center gap-1">
+                                                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> SES ({guests.length})
+                                                            </Button>
+                                                        </Link>
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <Button 
+                                                            size="sm" 
+                                                            onClick={() => handleQuickTransmitSES(r)} 
+                                                            disabled={transmittingRentalId === r.id}
+                                                            className="h-8 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5"
+                                                            title={`Enviar los ${guests.length} huéspedes de este alquiler en una sola comunicación a la policía (SES.HOSPEDAJES)`}
+                                                        >
+                                                            <Send className="h-3.5 w-3.5" /> 
+                                                            {transmittingRentalId === r.id ? "Enviando..." : `Enviar SES (${guests.length})`}
+                                                        </Button>
+                                                    );
+                                                }
+                                            }
+                                            return (
+                                                <Link href="/tramites" title="Parte de Viajeros (SES.HOSPEDAJES / Policía)">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-indigo-600"><ShieldCheck className="h-4 w-4" /></Button>
+                                                </Link>
+                                            );
+                                        })()}
+
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openCheckinModal(r)} title="Compartir Check-in Online (WhatsApp/Enlace)"><Share2 className="h-4 w-4 text-indigo-500" /></Button>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openReceiptModal(r)} title="Generar Recibo"><FileText className="h-4 w-4 text-emerald-600" /></Button>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)} title="Editar Alquiler"><Pencil className="h-4 w-4 text-blue-500" /></Button>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRental(r.id)} title="Eliminar Alquiler"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                     </TableCell>
                                 </TableRow>
                             );

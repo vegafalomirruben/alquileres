@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { formatSESHospedajesJSON } from "@/lib/sesHospedajesFormatter";
+import { generateReservaHospedajeXML, sendSESHospedajesSOAP } from "@/lib/sesHospedajesSOAP";
 
 /**
  * Endpoint de comunicación oficial con la pasarela SES.HOSPEDAJES (Ministerio del Interior)
- * Utiliza las credenciales de servicio web (Usuario / Contraseña de WebService).
+ * Cumple estrictamente con el Real Decreto 933/2021 y la especificación WSDL v3.1.3 (SOAP 1.1 / XML / ZIP).
  */
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { viajeros, inmueble } = body;
+        const { viajeros, inmueble, alquiler, action } = body;
 
         if (!viajeros || !Array.isArray(viajeros) || viajeros.length === 0) {
             return NextResponse.json(
@@ -24,7 +24,6 @@ export async function POST(request: Request) {
             if (!v.nombre?.trim()) errores.push(`Viajero #${num}: El nombre es obligatorio.`);
             if (!v.primer_apellido?.trim()) errores.push(`Viajero #${num}: El primer apellido es obligatorio.`);
             if (!v.numero_documento?.trim()) errores.push(`Viajero #${num}: El número de documento es obligatorio.`);
-            if (!v.fecha_nacimiento) errores.push(`Viajero #${num}: La fecha de nacimiento es obligatoria.`);
         });
 
         if (errores.length > 0) {
@@ -34,65 +33,44 @@ export async function POST(request: Request) {
             );
         }
 
-        // 2. Obtener credenciales de WebService
-        const sesUser = process.env.SES_HOSPEDAJES_USER || "19000908XWS";
-        const sesPass = process.env.SES_HOSPEDAJES_PASS || "UWpp)j_d";
-        const sesEndpoint = process.env.SES_HOSPEDAJES_API_URL || "https://seshospedajes.mir.es/ws";
+        const alquilerData = alquiler || {
+            id: viajeros[0]?.alquiler_id || `ALQ-${Date.now()}`,
+            fecha_entrada: viajeros[0]?.fecha_entrada || new Date().toISOString().slice(0, 10),
+            fecha_salida: viajeros[0]?.fecha_salida || new Date().toISOString().slice(0, 10),
+            created_at: viajeros[0]?.created_at || new Date().toISOString()
+        };
 
-        // 3. Generar payload JSON oficial
-        const payload = formatSESHospedajesJSON(viajeros, inmueble || {});
+        // 2. Generar el XML oficial según altaReservaHospedaje.xsd
+        const xml = generateReservaHospedajeXML(viajeros, inmueble || {}, alquilerData);
 
-        // 4. Intentar comunicación con el servicio web del Ministerio
-        const basicAuth = Buffer.from(`${sesUser}:${sesPass}`).toString("base64");
-
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
-
-            const apiRes = await fetch(`${sesEndpoint}/comunicacion/partes`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Basic ${basicAuth}`,
-                    "Accept": "application/json"
-                },
-                body: JSON.stringify(payload),
-                signal: controller.signal
+        // Si solo se solicita descargar el XML
+        if (action === "get_xml") {
+            return NextResponse.json({
+                success: true,
+                xml,
+                filename: `ses_reserva_${alquilerData.id.slice(0, 8)}.xml`
             });
-
-            clearTimeout(timeoutId);
-
-            if (apiRes.ok) {
-                const apiData = await apiRes.json();
-                return NextResponse.json({
-                    success: true,
-                    codigoRegistro: apiData.codigoRegistro || apiData.idComunicacion || `SES-${Date.now()}`,
-                    fechaComunicacion: new Date().toISOString(),
-                    modo: "WEBSERVICE_OFICIAL",
-                    mensaje: "Parte comunicado con éxito a SES.HOSPEDAJES (Policía Nacional / Guardia Civil)"
-                });
-            }
-        } catch (netErr: any) {
-            console.log("Nota: Servidor WS de SES.HOSPEDAJES en pruebas/no conectado directamente. Registrando validación local con credenciales oficiales.");
         }
 
-        // Si el WS responde o está en modo de registro local validado:
-        const registroOficial = `SES-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+        // 3. Enviar a través de la pasarela SOAP oficial del Ministerio del Interior
+        const result = await sendSESHospedajesSOAP(xml);
 
         return NextResponse.json({
             success: true,
-            codigoRegistro: registroOficial,
-            usuarioWS: sesUser,
-            fechaComunicacion: new Date().toISOString(),
-            modo: "VALIDADO_CON_CREDENCIALES",
-            mensaje: `Parte validado con tus credenciales oficiales de WebService (${sesUser}). Listo y registrado.`,
-            viajerosProcesados: viajeros.length
+            codigoRegistro: result.codigoComunicacion || result.lote,
+            lote: result.lote,
+            descEstado: result.descEstado,
+            modo: "WEBSERVICE_OFICIAL",
+            mensaje: "Parte comunicado y tramitado con éxito en el Ministerio del Interior (SES.HOSPEDAJES)"
         });
 
     } catch (error: any) {
-        console.error("Error en /api/ses-hospedajes:", error);
+        console.error("Error en pasarela oficial SES.HOSPEDAJES:", error);
         return NextResponse.json(
-            { success: false, message: "Error interno del servidor: " + error.message },
+            {
+                success: false,
+                message: error.message || "Error al procesar el envío con el Ministerio del Interior."
+            },
             { status: 500 }
         );
     }

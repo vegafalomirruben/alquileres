@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
     FileDown, Building, CheckCircle2, Landmark, PieChart, Table as TableIcon,
     Filter, Calendar, Info, Calculator, ShieldCheck, Users, UserCheck, Plus,
-    Trash2, Send, Download, FileText, Eye, AlertCircle
+    Trash2, Send, Download, FileText, Eye, AlertCircle, ChevronDown, ChevronRight, Clock, FileCode
 } from "lucide-react";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { Separator } from "@/components/ui/separator";
@@ -38,7 +38,24 @@ export default function TramitesPage() {
     const [alquileres, setAlquileres] = useState<any[]>([]);
     const [isViajeroModalOpen, setIsViajeroModalOpen] = useState(false);
     const [isSubmittingSES, setIsSubmittingSES] = useState(false);
+    const [submittingGroupKey, setSubmittingGroupKey] = useState<string | null>(null);
     const [selectedViviendaFilter, setSelectedViviendaFilter] = useState<string>("all");
+    const [expandedReservas, setExpandedReservas] = useState<Record<string, boolean>>({});
+
+    const toggleReservaExpand = (key: string) => {
+        setExpandedReservas(prev => ({
+            ...prev,
+            [key]: prev[key] === undefined ? false : !prev[key]
+        }));
+    };
+
+    const toggleAllReservas = (expand: boolean) => {
+        const next: Record<string, boolean> = {};
+        groupedReservas.forEach(g => {
+            next[g.key] = expand;
+        });
+        setExpandedReservas(next);
+    };
 
     const [viajeroForm, setViajeroForm] = useState<ViajeroData>({
         nombre: "",
@@ -102,7 +119,7 @@ export default function TramitesPage() {
     }
 
     async function fetchViajerosData() {
-        const { data: vData } = await supabase.from("viajeros").select("*, viviendas(nombre, direccion, nif_titular, nombre_titular, codigo_establecimiento_ses, licencia_turistica, nrua), alquileres(fecha_entrada, fecha_salida)").order("created_at", { ascending: false });
+        const { data: vData } = await supabase.from("viajeros").select("*, viviendas(nombre, direccion, nif_titular, nombre_titular, codigo_establecimiento_ses, licencia_turistica, nrua), alquileres(id, fecha_entrada, fecha_salida, created_at, plataformas(nombre))").order("created_at", { ascending: false });
         const { data: vivData } = await supabase.from("viviendas").select("*").order("nombre");
         const { data: alqData } = await supabase.from("alquileres").select("id, fecha_entrada, fecha_salida, vivienda_id, viviendas(nombre)").order("fecha_entrada", { ascending: false }).limit(50);
 
@@ -235,21 +252,23 @@ export default function TramitesPage() {
         toast.success(`Fichero JSON oficial generado (${listToExport.length} huésped/es)`);
     }
 
-    async function handleTransmitirSES(v: any) {
+    async function handleTransmitirGrupoSES(grupoViajeros: any[], viviendaData?: any, groupKey?: string) {
+        if (!grupoViajeros || grupoViajeros.length === 0) {
+            return toast.error("No hay viajeros seleccionados para tramitar.");
+        }
+        if (groupKey) setSubmittingGroupKey(groupKey);
         setIsSubmittingSES(true);
         try {
-            // Si el huésped está vinculado a una reserva, agrupamos a todos los acompañantes de la misma estancia
-            const grupoViajeros = v.alquiler_id
-                ? viajeros.filter(item => item.alquiler_id === v.alquiler_id)
-                : [v];
-
+            const vFirst = grupoViajeros[0];
+            const viv = viviendaData || vFirst.viviendas || {};
             const inmueble: InmuebleData = {
-                nombre: v.viviendas?.nombre || "Vivienda",
-                direccion: v.viviendas?.direccion,
-                nif_titular: v.viviendas?.nif_titular,
-                nombre_titular: v.viviendas?.nombre_titular,
-                codigo_establecimiento_ses: v.viviendas?.codigo_establecimiento_ses,
-                licencia_turistica: v.viviendas?.licencia_turistica
+                nombre: viv.nombre || "Vivienda",
+                direccion: viv.direccion,
+                nif_titular: viv.nif_titular,
+                nombre_titular: viv.nombre_titular,
+                codigo_establecimiento_ses: viv.codigo_establecimiento_ses,
+                licencia_turistica: viv.licencia_turistica,
+                nrua: viv.nrua
             };
 
             const res = await fetch("/api/ses-hospedajes", {
@@ -257,7 +276,13 @@ export default function TramitesPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     viajeros: grupoViajeros,
-                    inmueble
+                    inmueble,
+                    alquiler: vFirst.alquileres || {
+                        id: vFirst.alquiler_id || "ALQ",
+                        fecha_entrada: vFirst.fecha_entrada,
+                        fecha_salida: vFirst.fecha_salida,
+                        created_at: vFirst.created_at
+                    }
                 })
             });
 
@@ -265,7 +290,6 @@ export default function TramitesPage() {
 
             if (data.success) {
                 const ids = grupoViajeros.map(item => item.id);
-                // Actualizar estado en la BD para todos los de la reserva
                 await supabase
                     .from("viajeros")
                     .update({
@@ -274,22 +298,170 @@ export default function TramitesPage() {
                     })
                     .in("id", ids);
 
-                toast.success(`Comunicación completada (${grupoViajeros.length} huésped/es). Acuse: ${data.codigoRegistro}`);
+                toast.success(`¡Alquiler tramitado con éxito! (${grupoViajeros.length} huésped/es registrados en un solo envío). Acuse: ${data.codigoRegistro}`);
                 fetchViajerosData();
             } else {
                 toast.error(`Error de validación: ${data.message}`);
+                if (data.errores && Array.isArray(data.errores)) {
+                    data.errores.forEach((errStr: string) => toast.error(errStr));
+                }
             }
         } catch (err: any) {
             toast.error("Error al conectar con la pasarela SES: " + err.message);
         } finally {
             setIsSubmittingSES(false);
+            setSubmittingGroupKey(null);
         }
+    }
+
+    async function handleDownloadXML(grupoViajeros: any[], viviendaData?: any) {
+        if (!grupoViajeros || grupoViajeros.length === 0) return;
+        const vFirst = grupoViajeros[0];
+        const viv = viviendaData || vFirst.viviendas || {};
+        const inmueble: InmuebleData = {
+            nombre: viv.nombre || "Vivienda",
+            direccion: viv.direccion,
+            nif_titular: viv.nif_titular,
+            nombre_titular: viv.nombre_titular,
+            codigo_establecimiento_ses: viv.codigo_establecimiento_ses,
+            licencia_turistica: viv.licencia_turistica,
+            nrua: viv.nrua
+        };
+
+        try {
+            const res = await fetch("/api/ses-hospedajes", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    viajeros: grupoViajeros,
+                    inmueble,
+                    alquiler: vFirst.alquileres || {
+                        id: vFirst.alquiler_id || "ALQ",
+                        fecha_entrada: vFirst.fecha_entrada,
+                        fecha_salida: vFirst.fecha_salida,
+                        created_at: vFirst.created_at
+                    },
+                    action: "get_xml"
+                })
+            });
+            const data = await res.json();
+            if (data.success && data.xml) {
+                const blob = new Blob([data.xml], { type: "application/xml;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = data.filename || `ses_reserva_${format(new Date(), "yyyyMMdd")}.xml`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                toast.success("Fichero XML oficial descargado correctamente (RD 933/2021)");
+            } else {
+                toast.error("Error al generar XML: " + (data.message || "desconocido"));
+            }
+        } catch (e: any) {
+            toast.error("Error al descargar XML: " + e.message);
+        }
+    }
+
+    async function handleTransmitirSES(v: any) {
+        const grupoViajeros = v.alquiler_id
+            ? viajeros.filter(item => item.alquiler_id === v.alquiler_id)
+            : [v];
+        await handleTransmitirGrupoSES(grupoViajeros, v.viviendas);
+    }
+
+    function handleDownloadAllPDFs(grupoViajeros: any[], viviendaData?: any) {
+        if (!grupoViajeros || grupoViajeros.length === 0) return;
+        const viv = viviendaData || grupoViajeros[0]?.viviendas || {};
+        const inmueble: InmuebleData = {
+            nombre: viv.nombre || "Vivienda",
+            direccion: viv.direccion,
+            nif_titular: viv.nif_titular,
+            nombre_titular: viv.nombre_titular,
+            codigo_establecimiento_ses: viv.codigo_establecimiento_ses,
+            licencia_turistica: viv.licencia_turistica,
+            nrua: viv.nrua
+        };
+
+        grupoViajeros.forEach((v, index) => {
+            setTimeout(() => {
+                generateParteViajerosPDF(v, inmueble);
+            }, index * 200);
+        });
+        toast.success(`Generando ${grupoViajeros.length} Partes de Viajeros en PDF...`);
     }
 
     const filteredViajeros = viajeros.filter(v => {
         if (selectedViviendaFilter === "all") return true;
         return v.vivienda_id === selectedViviendaFilter;
     });
+
+    const groupedReservas = useMemo(() => {
+        const groupsMap = new Map<string, {
+            key: string;
+            alquilerId?: string | null;
+            viviendaId?: string | null;
+            vivienda: any;
+            fechaEntrada?: string | null;
+            fechaSalida?: string | null;
+            viajeros: any[];
+            estadoSES: "REGISTRADO" | "PENDIENTE" | "PARCIAL";
+            codigoRegistro?: string | null;
+            titularNombre: string;
+            alquiler?: any;
+        }>();
+
+        filteredViajeros.forEach(v => {
+            const key = v.alquiler_id 
+                ? `alq_${v.alquiler_id}` 
+                : (v.vivienda_id && v.fecha_entrada 
+                    ? `estancia_${v.vivienda_id}_${v.fecha_entrada}` 
+                    : `ind_${v.id}`);
+
+            if (!groupsMap.has(key)) {
+                groupsMap.set(key, {
+                    key,
+                    alquilerId: v.alquiler_id || null,
+                    viviendaId: v.vivienda_id || null,
+                    vivienda: v.viviendas || null,
+                    fechaEntrada: v.fecha_entrada || v.alquileres?.fecha_entrada,
+                    fechaSalida: v.fecha_salida || v.alquileres?.fecha_salida,
+                    viajeros: [],
+                    estadoSES: "PENDIENTE",
+                    codigoRegistro: null,
+                    titularNombre: "",
+                    alquiler: v.alquileres
+                });
+            }
+
+            groupsMap.get(key)!.viajeros.push(v);
+        });
+
+        return Array.from(groupsMap.values()).map(group => {
+            const titular = group.viajeros.find(v => v.parentesco === "TITULAR") || group.viajeros[0];
+            const titularNombre = titular ? `${titular.nombre} ${titular.primer_apellido}` : "Sin titular";
+
+            const allRegistrados = group.viajeros.every(v => v.estado_ses === "REGISTRADO");
+            const someRegistrados = group.viajeros.some(v => v.estado_ses === "REGISTRADO");
+            const estadoSES: "REGISTRADO" | "PENDIENTE" | "PARCIAL" = allRegistrados 
+                ? "REGISTRADO" 
+                : (someRegistrados ? "PARCIAL" : "PENDIENTE");
+
+            const codigoRegistro = group.viajeros.find(v => v.codigo_comunicacion_ses)?.codigo_comunicacion_ses || null;
+
+            return {
+                ...group,
+                titularNombre,
+                estadoSES,
+                codigoRegistro
+            };
+        }).sort((a, b) => {
+            const dateA = a.fechaEntrada ? new Date(a.fechaEntrada).getTime() : 0;
+            const dateB = b.fechaEntrada ? new Date(b.fechaEntrada).getTime() : 0;
+            return dateB - dateA;
+        });
+    }, [filteredViajeros]);
 
     // --- REGISTRADORES & HACIENDA HANDLERS ---
     async function generateRegistradoresCSV() {
@@ -589,19 +761,37 @@ export default function TramitesPage() {
                         </Card>
                     </div>
 
-                    {/* LISTADO DE VIAJEROS */}
+                    {/* LISTADO DE VIAJEROS AGRUPADO POR ALQUILER */}
                     <Card className="shadow-lg border-primary/10 overflow-hidden">
                         <CardHeader className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-muted/30 border-b border-primary/5 pb-4">
                             <div>
                                 <CardTitle className="text-lg font-bold flex items-center gap-2">
                                     <Users className="h-5 w-5 text-primary" />
-                                    Libro-Registro de Viajeros
+                                    Libro-Registro por Alquileres y Huéspedes
                                 </CardTitle>
-                                <CardDescription className="text-xs">Historial de inquilinos y partes de entrada generados.</CardDescription>
+                                <CardDescription className="text-xs">
+                                    Cada línea representa un alquiler completo. Despliega para ver a los viajeros o tramita toda la reserva en un solo envío a SES.HOSPEDAJES (RD 933/2021).
+                                </CardDescription>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => toggleAllReservas(true)}
+                                    className="h-8 text-xs font-semibold"
+                                >
+                                    Expandir todos
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => toggleAllReservas(false)}
+                                    className="h-8 text-xs font-semibold"
+                                >
+                                    Contraer todos
+                                </Button>
                                 <Select value={selectedViviendaFilter} onValueChange={setSelectedViviendaFilter}>
-                                    <SelectTrigger className="w-56 h-9 rounded-xl text-xs font-bold">
+                                    <SelectTrigger className="w-52 h-8 rounded-xl text-xs font-bold">
                                         <SelectValue placeholder="Todas las viviendas" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -617,99 +807,249 @@ export default function TramitesPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-muted/10">
-                                        <TableHead className="font-bold text-xs">Viajero</TableHead>
-                                        <TableHead className="font-bold text-xs">Documento</TableHead>
+                                        <TableHead className="w-10"></TableHead>
+                                        <TableHead className="font-bold text-xs">Alquiler / Estancia</TableHead>
+                                        <TableHead className="font-bold text-xs">Titular & Huéspedes</TableHead>
                                         <TableHead className="font-bold text-xs">Vivienda</TableHead>
-                                        <TableHead className="font-bold text-xs">Estancia</TableHead>
                                         <TableHead className="font-bold text-xs">Estado SES</TableHead>
-                                        <TableHead className="font-bold text-xs text-right">Acciones Oficiales</TableHead>
+                                        <TableHead className="font-bold text-xs text-right">Acciones Oficiales del Alquiler</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredViajeros.map((v) => (
-                                        <TableRow key={v.id} className="hover:bg-primary/5 transition-colors">
-                                            <TableCell>
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-sm text-foreground">
-                                                        {v.nombre} {v.primer_apellido} {v.segundo_apellido || ""}
-                                                    </span>
-                                                    <span className="text-[11px] text-muted-foreground">
-                                                        {v.nacionalidad || "ESP"} • Nac: {v.fecha_nacimiento ? format(parseISO(v.fecha_nacimiento), "dd/MM/yyyy") : "-"}
-                                                    </span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-1.5 font-mono text-xs font-bold">
-                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{v.tipo_documento || "DNI"}</span>
-                                                    {v.numero_documento}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-xs font-medium">
-                                                {v.viviendas?.nombre || "Sin asignar"}
-                                            </TableCell>
-                                            <TableCell className="text-xs">
-                                                {v.fecha_entrada ? format(parseISO(v.fecha_entrada), "dd/MM/yy") : "-"}
-                                                {v.fecha_salida ? ` al ${format(parseISO(v.fecha_salida), "dd/MM/yy")}` : ""}
-                                            </TableCell>
-                                            <TableCell>
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold ${v.estado_ses === 'REGISTRADO'
-                                                    ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                                                    : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
-                                                    }`}>
-                                                    {v.estado_ses || "PENDIENTE"}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => handleDownloadPDF(v)}
-                                                        className="h-8 text-xs font-bold rounded-lg border-primary/20 text-primary hover:bg-primary/10"
-                                                        title="Descargar Parte Oficial en PDF para firma"
-                                                    >
-                                                        <FileText className="h-3.5 w-3.5 mr-1" /> Parte PDF
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            const grupo = v.alquiler_id
-                                                                ? viajeros.filter(item => item.alquiler_id === v.alquiler_id)
-                                                                : [v];
-                                                            handleExportJSON(grupo);
-                                                        }}
-                                                        className="h-8 text-xs font-bold rounded-lg border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
-                                                        title="Descargar fichero JSON oficial (RD 933/2021) de esta estancia"
-                                                    >
-                                                        <FileDown className="h-3.5 w-3.5 mr-1" /> JSON
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => handleTransmitirSES(v)}
-                                                        disabled={isSubmittingSES}
-                                                        className="h-8 text-xs font-bold rounded-lg text-indigo-600 hover:bg-indigo-50"
-                                                        title="Validar y tramitar comunicación oficial"
-                                                    >
-                                                        <Send className="h-3.5 w-3.5 mr-1" /> Tramitar
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => handleDeleteViajero(v.id)}
-                                                        className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 rounded-lg"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {filteredViajeros.length === 0 && (
+                                    {groupedReservas.map((group) => {
+                                        const isExpanded = expandedReservas[group.key] ?? true;
+                                        const isSubmittingThis = submittingGroupKey === group.key;
+                                        const count = group.viajeros.length;
+                                        const titular = group.viajeros.find(v => v.parentesco === "TITULAR") || group.viajeros[0];
+
+                                        return (
+                                            <React.Fragment key={group.key}>
+                                                {/* FILA PRINCIPAL: EL ALQUILER */}
+                                                <TableRow 
+                                                    className={`transition-colors cursor-pointer ${isExpanded ? "bg-muted/30 border-b-0" : "hover:bg-muted/20"}`}
+                                                    onClick={() => toggleReservaExpand(group.key)}
+                                                >
+                                                    <TableCell className="py-3.5 pl-4 pr-1 text-center">
+                                                        <button 
+                                                            type="button"
+                                                            className="p-1 rounded-md hover:bg-muted text-muted-foreground transition-transform"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleReservaExpand(group.key);
+                                                            }}
+                                                        >
+                                                            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? "rotate-0 text-primary" : "-rotate-90 text-muted-foreground"}`} />
+                                                        </button>
+                                                    </TableCell>
+                                                    <TableCell className="py-3.5">
+                                                        <div className="flex flex-col">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-sm text-foreground">
+                                                                    {group.fechaEntrada ? format(parseISO(group.fechaEntrada), "dd/MM/yyyy") : "-"}
+                                                                    {group.fechaSalida ? ` al ${format(parseISO(group.fechaSalida), "dd/MM/yyyy")}` : ""}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                                <Calendar className="h-3 w-3 text-indigo-500" />
+                                                                {group.fechaEntrada && group.fechaSalida ? (
+                                                                    `${Math.max(1, differenceInDays(parseISO(group.fechaSalida), parseISO(group.fechaEntrada)))} noche/s`
+                                                                ) : "Estancia registrada"}
+                                                                {group.alquilerId ? " • Vinculado a alquiler" : " • Registro manual"}
+                                                            </span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="py-3.5">
+                                                        <div className="flex flex-col">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-xs text-foreground">
+                                                                    {group.titularNombre}
+                                                                </span>
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/10 text-indigo-600 border border-indigo-500/20">
+                                                                    <Users className="h-3 w-3 mr-1" /> {count} {count === 1 ? "huésped" : "huéspedes"}
+                                                                </span>
+                                                            </div>
+                                                            {count > 1 && (
+                                                                <span className="text-[11px] text-muted-foreground truncate max-w-[240px]">
+                                                                    + {count - 1} acompañante/s: {group.viajeros.filter(v => v.id !== titular?.id).map(v => v.nombre).join(", ")}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="py-3.5 text-xs font-semibold text-foreground">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Building className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            {group.vivienda?.nombre || "Sin asignar"}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="py-3.5">
+                                                        {group.estadoSES === "REGISTRADO" ? (
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 w-fit">
+                                                                    <CheckCircle2 className="h-3 w-3 mr-1" /> REGISTRADO
+                                                                </span>
+                                                                {group.codigoRegistro && (
+                                                                    <span className="font-mono text-[10px] text-muted-foreground font-semibold">
+                                                                        Acuse: {group.codigoRegistro}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        ) : group.estadoSES === "PARCIAL" ? (
+                                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-orange-500/10 text-orange-600 border border-orange-500/20">
+                                                                <Clock className="h-3 w-3 mr-1" /> PARCIAL
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                                                <Clock className="h-3 w-3 mr-1" /> PENDIENTE ENVÍO
+                                                            </span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="py-3.5 text-right pr-4" onClick={(e) => e.stopPropagation()}>
+                                                        <div className="flex items-center justify-end gap-2 flex-wrap">
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleTransmitirGrupoSES(group.viajeros, group.vivienda, group.key)}
+                                                                disabled={isSubmittingSES}
+                                                                className={`h-8 text-xs font-bold rounded-xl shadow-sm ${group.estadoSES === "REGISTRADO" 
+                                                                    ? "border border-emerald-500/30 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                                                    : "bg-indigo-600 hover:bg-indigo-700 text-white"}`}
+                                                                title="Enviar todos los huéspedes de este alquiler en una sola comunicación oficial a la policía (SES.HOSPEDAJES)"
+                                                            >
+                                                                <Send className="h-3.5 w-3.5 mr-1" />
+                                                                {isSubmittingThis ? "Tramitando..." : group.estadoSES === "REGISTRADO" ? "Reenviar SES" : "Enviar a Policía (SES)"}
+                                                            </Button>
+
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleExportJSON(group.viajeros)}
+                                                                className="h-8 text-xs font-bold rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
+                                                                title="Descargar fichero JSON oficial con todos los huéspedes de este alquiler (RD 933/2021)"
+                                                            >
+                                                                <FileDown className="h-3.5 w-3.5 mr-1" /> JSON
+                                                            </Button>
+
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleDownloadXML(group.viajeros, group.vivienda)}
+                                                                className="h-8 text-xs font-bold rounded-xl border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300"
+                                                                title="Descargar fichero XML oficial (altaReservaHospedaje.xsd / RD 933/2021) para inspección o subida web"
+                                                            >
+                                                                <FileCode className="h-3.5 w-3.5 mr-1" /> XML Oficial
+                                                            </Button>
+
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                onClick={() => toggleReservaExpand(group.key)}
+                                                                className="h-8 px-2 text-xs font-bold text-muted-foreground hover:text-foreground"
+                                                                title={isExpanded ? "Ocultar huéspedes" : "Ver huéspedes"}
+                                                            >
+                                                                {isExpanded ? "Ocultar" : `Ver (${count})`}
+                                                            </Button>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+
+                                                {/* DESPLEGABLE: LISTADO DE VIAJEROS DEL ALQUILER */}
+                                                {isExpanded && (
+                                                    <TableRow className="bg-muted/15 border-b border-primary/10">
+                                                        <TableCell colSpan={6} className="p-0">
+                                                            <div className="p-4 pl-12 pr-6 space-y-3 bg-gradient-to-b from-muted/20 to-transparent">
+                                                                <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Users className="h-4 w-4 text-indigo-500" />
+                                                                        <span className="text-xs font-bold text-foreground">
+                                                                            Huéspedes registrados en este alquiler ({count})
+                                                                        </span>
+                                                                        <span className="text-[11px] text-muted-foreground font-normal">
+                                                                            — Se comunican juntos en el mismo parte oficial
+                                                                        </span>
+                                                                    </div>
+                                                                    {count > 1 && (
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="ghost"
+                                                                            onClick={() => handleDownloadAllPDFs(group.viajeros, group.vivienda)}
+                                                                            className="h-7 text-[11px] font-bold text-primary hover:bg-primary/10"
+                                                                        >
+                                                                            <Download className="h-3 w-3 mr-1" /> Descargar todos los Partes PDF
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="grid gap-2">
+                                                                    {group.viajeros.map((v, vIdx) => (
+                                                                        <div 
+                                                                            key={v.id} 
+                                                                            className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-2xl bg-card border border-border/60 hover:border-primary/20 shadow-xs transition-colors"
+                                                                        >
+                                                                            <div className="flex items-start md:items-center gap-3">
+                                                                                <div className={`p-2 rounded-xl text-xs font-black ${v.parentesco === 'TITULAR' ? 'bg-indigo-500/10 text-indigo-600' : 'bg-slate-500/10 text-slate-600 dark:text-slate-300'}`}>
+                                                                                    {vIdx + 1}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="font-bold text-xs text-foreground">
+                                                                                            {v.nombre} {v.primer_apellido} {v.segundo_apellido || ""}
+                                                                                        </span>
+                                                                                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${v.parentesco === 'TITULAR' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/50' : 'bg-muted text-muted-foreground'}`}>
+                                                                                            {v.parentesco || (vIdx === 0 ? "TITULAR" : "ACOMPAÑANTE")}
+                                                                                        </span>
+                                                                                        {v.firma && (
+                                                                                            <span className="text-[10px] text-emerald-600 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20 font-bold">
+                                                                                                ✓ Firmado
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5 flex-wrap">
+                                                                                        <span className="font-mono font-bold text-foreground">
+                                                                                            {v.tipo_documento || "DNI"}: {v.numero_documento}
+                                                                                        </span>
+                                                                                        {v.numero_soporte && <span>(Soporte: {v.numero_soporte})</span>}
+                                                                                        <span>• {v.nacionalidad || "ESP"}</span>
+                                                                                        <span>• Nac: {v.fecha_nacimiento ? format(parseISO(v.fecha_nacimiento), "dd/MM/yyyy") : "-"}</span>
+                                                                                        {v.telefono && <span>• Tel: {v.telefono}</span>}
+                                                                                        {v.email && <span>• {v.email}</span>}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="flex items-center gap-1.5 self-end md:self-center shrink-0">
+                                                                                <Button
+                                                                                    size="sm"
+                                                                                    variant="outline"
+                                                                                    onClick={() => handleDownloadPDF(v)}
+                                                                                    className="h-7 text-xs font-bold rounded-lg border-primary/20 text-primary hover:bg-primary/10"
+                                                                                    title="Descargar Parte Oficial en PDF individual para firma o archivo"
+                                                                                >
+                                                                                    <FileText className="h-3 w-3 mr-1" /> Parte PDF
+                                                                                </Button>
+                                                                                <Button
+                                                                                    size="sm"
+                                                                                    variant="ghost"
+                                                                                    onClick={() => handleDeleteViajero(v.id)}
+                                                                                    className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10 rounded-lg"
+                                                                                    title="Eliminar este viajero"
+                                                                                >
+                                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
+
+                                    {groupedReservas.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={6} className="text-center py-12 text-muted-foreground font-medium">
-                                                No hay huéspedes registrados en el sistema. Pulsa en <strong>&quot;Registrar Nuevo Huésped&quot;</strong> para dar de alta el primer parte.
+                                                No hay huéspedes registrados en el sistema. Pulsa en <strong>&quot;Registrar Nuevo Huésped&quot;</strong> para dar de alta el primer parte o envía el enlace de check-in a tus clientes.
                                             </TableCell>
                                         </TableRow>
                                     )}
