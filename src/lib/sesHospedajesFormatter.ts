@@ -1,5 +1,6 @@
 import { ViajeroData, InmuebleData } from "./generateParteViajeros";
 import { format, parseISO } from "date-fns";
+import { normalizeCountryToISO3 } from "./countryCodes";
 
 /**
  * Genera el formato de comunicación oficial JSON para SES.HOSPEDAJES (Ministerio del Interior)
@@ -31,7 +32,7 @@ export function formatSESHospedajesJSON(viajeros: ViajeroData[], inmueble: Inmue
                 numeroDocumento: v.numero_documento?.trim().toUpperCase(),
                 numeroSoporte: v.numero_soporte?.trim() || null,
                 fechaExpedicion: v.fecha_expedicion_doc ? format(parseISO(v.fecha_expedicion_doc), "yyyy-MM-dd") : null,
-                nacionalidad: v.nacionalidad || "ESP",
+                nacionalidad: normalizeCountryToISO3(v.nacionalidad),
                 fechaNacimiento: v.fecha_nacimiento ? format(parseISO(v.fecha_nacimiento), "yyyy-MM-dd") : null,
                 lugarResidencia: v.lugar_residencia || null,
                 telefono: v.telefono || null,

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { generateReservaHospedajeXML, sendSESHospedajesSOAP } from "@/lib/sesHospedajesSOAP";
+import { generateReservaHospedajeXML, sendSESHospedajesSOAP, mapTipoDocumentoSES } from "@/lib/sesHospedajesSOAP";
+import { normalizeCountryToISO3, VALID_ISO3_CODES } from "@/lib/countryCodes";
+import { validateDocument } from "@/lib/documentValidation";
 
 /**
  * Endpoint de comunicación oficial con la pasarela SES.HOSPEDAJES (Ministerio del Interior)
@@ -24,6 +26,23 @@ export async function POST(request: Request) {
             if (!v.nombre?.trim()) errores.push(`Viajero #${num}: El nombre es obligatorio.`);
             if (!v.primer_apellido?.trim()) errores.push(`Viajero #${num}: El primer apellido es obligatorio.`);
             if (!v.numero_documento?.trim()) errores.push(`Viajero #${num}: El número de documento es obligatorio.`);
+
+            // Normalización y validación estricta de nacionalidad (ISO 3166-1 Alfa-3)
+            const iso3 = normalizeCountryToISO3(v.nacionalidad);
+            v.nacionalidad = iso3;
+            if (!VALID_ISO3_CODES.has(iso3)) {
+                errores.push(`Viajero #${num} (${v.nombre}): El país o nacionalidad "${v.nacionalidad}" no es un código ISO 3166-1 Alfa-3 válido.`);
+            }
+
+            // Validación de formato y letra de control para DNI y NIE
+            const tipoDoc = mapTipoDocumentoSES(v.tipo_documento, v.numero_documento);
+            const numDoc = (v.numero_documento || "").trim().toUpperCase().replace(/[-\s]/g, "");
+            if (tipoDoc === "NIE" || tipoDoc === "NIF") {
+                const docCheck = validateDocument(tipoDoc, numDoc);
+                if (!docCheck.valid) {
+                    errores.push(`Viajero #${num} (${v.nombre} ${v.primer_apellido}): ${docCheck.message}`);
+                }
+            }
         });
 
         if (errores.length > 0) {

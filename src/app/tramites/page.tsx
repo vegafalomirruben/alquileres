@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
     FileDown, Building, CheckCircle2, Landmark, PieChart, Table as TableIcon,
     Filter, Calendar, Info, Calculator, ShieldCheck, Users, UserCheck, Plus,
-    Trash2, Send, Download, FileText, Eye, AlertCircle, ChevronDown, ChevronRight, Clock, FileCode
+    Trash2, Send, Download, FileText, Eye, AlertCircle, ChevronDown, ChevronRight, Clock, FileCode, Pencil
 } from "lucide-react";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { Separator } from "@/components/ui/separator";
@@ -21,6 +21,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { splitRentals } from "@/lib/rentalSplitter";
 import { generateParteViajerosPDF, ViajeroData, InmuebleData } from "@/lib/generateParteViajeros";
 import { downloadSESHospedajesJSON } from "@/lib/sesHospedajesFormatter";
+import { normalizeCountryToISO3, COMMON_NATIONALITIES } from "@/lib/countryCodes";
+import { validateDocument, getExpectedNieLetter, getExpectedDniLetter } from "@/lib/documentValidation";
 
 export default function TramitesPage() {
     const isLeapYear = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
@@ -37,6 +39,7 @@ export default function TramitesPage() {
     const [viviendas, setViviendas] = useState<any[]>([]);
     const [alquileres, setAlquileres] = useState<any[]>([]);
     const [isViajeroModalOpen, setIsViajeroModalOpen] = useState(false);
+    const [editingViajeroId, setEditingViajeroId] = useState<string | null>(null);
     const [isSubmittingSES, setIsSubmittingSES] = useState(false);
     const [submittingGroupKey, setSubmittingGroupKey] = useState<string | null>(null);
     const [selectedViviendaFilter, setSelectedViviendaFilter] = useState<string>("all");
@@ -149,6 +152,7 @@ export default function TramitesPage() {
 
     // --- SES / VIAJEROS HANDLERS ---
     function resetViajeroForm() {
+        setEditingViajeroId(null);
         setViajeroForm({
             nombre: "",
             primer_apellido: "",
@@ -171,6 +175,31 @@ export default function TramitesPage() {
         });
     }
 
+    function handleEditViajero(v: any) {
+        setEditingViajeroId(v.id);
+        setViajeroForm({
+            nombre: v.nombre || "",
+            primer_apellido: v.primer_apellido || "",
+            segundo_apellido: v.segundo_apellido || "",
+            sexo: v.sexo || "H",
+            tipo_documento: v.tipo_documento || "DNI",
+            numero_documento: v.numero_documento || "",
+            numero_soporte: v.numero_soporte || "",
+            fecha_expedicion_doc: v.fecha_expedicion_doc || "",
+            nacionalidad: v.nacionalidad || "ESP",
+            fecha_nacimiento: v.fecha_nacimiento || "",
+            lugar_residencia: v.lugar_residencia || "",
+            telefono: v.telefono || "",
+            email: v.email || "",
+            fecha_entrada: v.fecha_entrada ? v.fecha_entrada.slice(0, 10) : "",
+            fecha_salida: v.fecha_salida ? v.fecha_salida.slice(0, 10) : "",
+            parentesco: v.parentesco || "TITULAR",
+            vivienda_id: v.vivienda_id || "",
+            alquiler_id: v.alquiler_id || ""
+        });
+        setIsViajeroModalOpen(true);
+    }
+
     async function handleSaveViajero() {
         if (!viajeroForm.nombre || !viajeroForm.primer_apellido || !viajeroForm.numero_documento || !viajeroForm.fecha_nacimiento) {
             return toast.error("Por favor completa los campos obligatorios (Nombre, Apellido, Documento y Fecha Nacimiento)");
@@ -178,6 +207,7 @@ export default function TramitesPage() {
 
         const dataToSave = {
             ...viajeroForm,
+            nacionalidad: normalizeCountryToISO3(viajeroForm.nacionalidad),
             vivienda_id: viajeroForm.vivienda_id || null,
             alquiler_id: viajeroForm.alquiler_id || null,
             fecha_expedicion_doc: viajeroForm.fecha_expedicion_doc || null,
@@ -186,13 +216,20 @@ export default function TramitesPage() {
             fecha_salida: viajeroForm.fecha_salida || null
         };
 
-        const { error } = await supabase.from("viajeros").insert([dataToSave]);
+        let error = null;
+        if (editingViajeroId) {
+            const res = await supabase.from("viajeros").update(dataToSave).eq("id", editingViajeroId);
+            error = res.error;
+        } else {
+            const res = await supabase.from("viajeros").insert([dataToSave]);
+            error = res.error;
+        }
 
         if (error) {
             console.error("Error al guardar viajero:", error);
             toast.error("Error al registrar viajero: " + error.message);
         } else {
-            toast.success("Viajero registrado correctamente");
+            toast.success(editingViajeroId ? "Viajero actualizado correctamente" : "Viajero registrado correctamente");
             setIsViajeroModalOpen(false);
             resetViajeroForm();
             fetchViajerosData();
@@ -1019,6 +1056,15 @@ export default function TramitesPage() {
                                                                                 <Button
                                                                                     size="sm"
                                                                                     variant="outline"
+                                                                                    onClick={() => handleEditViajero(v)}
+                                                                                    className="h-7 text-xs font-bold rounded-lg border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
+                                                                                    title="Modificar datos o corregir documento del viajero"
+                                                                                >
+                                                                                    <Pencil className="h-3 w-3 mr-1" /> Editar
+                                                                                </Button>
+                                                                                <Button
+                                                                                    size="sm"
+                                                                                    variant="outline"
                                                                                     onClick={() => handleDownloadPDF(v)}
                                                                                     className="h-7 text-xs font-bold rounded-lg border-primary/20 text-primary hover:bg-primary/10"
                                                                                     title="Descargar Parte Oficial en PDF individual para firma o archivo"
@@ -1064,7 +1110,7 @@ export default function TramitesPage() {
                             <DialogHeader>
                                 <DialogTitle className="text-xl font-extrabold flex items-center gap-2 text-primary">
                                     <UserCheck className="h-6 w-6 text-primary" />
-                                    Registro Oficial de Huésped (RD 933/2021)
+                                    {editingViajeroId ? "Modificar Datos del Huésped / Viajero" : "Registro Oficial de Huésped (RD 933/2021)"}
                                 </DialogTitle>
                             </DialogHeader>
 
@@ -1142,7 +1188,61 @@ export default function TramitesPage() {
                                     </div>
                                     <div className="grid gap-1.5">
                                         <Label className="font-bold">Nº Documento *</Label>
-                                        <Input placeholder="Ej: 12345678Z" value={viajeroForm.numero_documento} onChange={e => setViajeroForm({ ...viajeroForm, numero_documento: e.target.value })} />
+                                        <Input 
+                                            placeholder={viajeroForm.tipo_documento === "NIE" ? "Ej: X1234567A" : "Ej: 12345678Z"} 
+                                            value={viajeroForm.numero_documento} 
+                                            onChange={e => setViajeroForm({ ...viajeroForm, numero_documento: e.target.value.toUpperCase() })} 
+                                        />
+                                        {viajeroForm.tipo_documento === 'NIE' && viajeroForm.numero_documento && (() => {
+                                            const exp = getExpectedNieLetter(viajeroForm.numero_documento);
+                                            const curr = viajeroForm.numero_documento.trim().toUpperCase().slice(-1);
+                                            if (exp && curr && exp !== curr) {
+                                                return (
+                                                    <div className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 p-1 rounded border border-amber-500/20 flex items-center justify-between mt-1">
+                                                        <span>⚠️ Letra calculada: <strong>{exp}</strong> (indicada: {curr})</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const clean = viajeroForm.numero_documento.trim().toUpperCase();
+                                                                setViajeroForm({
+                                                                    ...viajeroForm,
+                                                                    numero_documento: clean.slice(0, -1) + exp
+                                                                });
+                                                            }}
+                                                            className="underline font-bold text-indigo-600 dark:text-indigo-400 hover:opacity-80 ml-1"
+                                                        >
+                                                            Cambiar a {exp}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                        {viajeroForm.tipo_documento === 'DNI' && viajeroForm.numero_documento && (() => {
+                                            const exp = getExpectedDniLetter(viajeroForm.numero_documento);
+                                            const curr = viajeroForm.numero_documento.trim().toUpperCase().slice(-1);
+                                            if (exp && curr && exp !== curr) {
+                                                return (
+                                                    <div className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 p-1 rounded border border-amber-500/20 flex items-center justify-between mt-1">
+                                                        <span>⚠️ Letra calculada: <strong>{exp}</strong> (indicada: {curr})</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const clean = viajeroForm.numero_documento.trim().toUpperCase();
+                                                                setViajeroForm({
+                                                                    ...viajeroForm,
+                                                                    numero_documento: clean.slice(0, -1) + exp
+                                                                });
+                                                            }}
+                                                            className="underline font-bold text-indigo-600 dark:text-indigo-400 hover:opacity-80 ml-1"
+                                                        >
+                                                            Cambiar a {exp}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                     </div>
                                     <div className="grid gap-1.5">
                                         <Label className="font-bold">Nº Soporte</Label>
@@ -1164,7 +1264,17 @@ export default function TramitesPage() {
                                 <div className="grid grid-cols-3 gap-4">
                                     <div className="grid gap-1.5">
                                         <Label className="font-bold">Nacionalidad</Label>
-                                        <Input placeholder="ESP / España" value={viajeroForm.nacionalidad || "ESP"} onChange={e => setViajeroForm({ ...viajeroForm, nacionalidad: e.target.value })} />
+                                        <Input 
+                                            placeholder="ESP / España, ROU / Rumanía..." 
+                                            value={viajeroForm.nacionalidad || "ESP"} 
+                                            list="tramites-nacionalidades-list"
+                                            onChange={e => setViajeroForm({ ...viajeroForm, nacionalidad: e.target.value })} 
+                                        />
+                                        <datalist id="tramites-nacionalidades-list">
+                                            {COMMON_NATIONALITIES.map(n => (
+                                                <option key={n.code} value={n.code}>{n.label}</option>
+                                            ))}
+                                        </datalist>
                                     </div>
                                     <div className="grid gap-1.5">
                                         <Label className="font-bold">Fecha Nacimiento *</Label>
@@ -1205,7 +1315,7 @@ export default function TramitesPage() {
                                 <div className="flex justify-end gap-3 pt-4 border-t border-primary/10">
                                     <Button variant="ghost" onClick={() => setIsViajeroModalOpen(false)}>Cancelar</Button>
                                     <Button onClick={handleSaveViajero} className="bg-primary font-bold">
-                                        Guardar Huésped
+                                        {editingViajeroId ? "Guardar Cambios" : "Guardar Huésped"}
                                     </Button>
                                 </div>
                             </div>

@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { format, parseISO } from "date-fns";
+import { normalizeCountryToISO3 } from "./countryCodes";
 
 export interface ViajeroSES {
     id?: string;
@@ -52,14 +53,15 @@ export function mapTipoDocumentoSES(tipo?: string | null, docNumber?: string | n
     if (t === "DNI" || t === "NIF") return "NIF";
     if (t === "NIE") return "NIE";
     if (t === "PASAPORTE" || t === "PAS") return "PAS";
+    if (t === "OTRO" || t === "OTR" || t === "EXTRANJERO" || t === "ID_EXTRANJERO") return "OTRO";
     
     // Inferencia por formato de número si no está definido
     if (docNumber) {
-        const num = docNumber.trim().toUpperCase();
+        const num = docNumber.trim().toUpperCase().replace(/[-\s]/g, "");
         if (/^[XYZ]\d{7}[A-Z]$/.test(num)) return "NIE";
         if (/^\d{8}[A-Z]$/.test(num)) return "NIF";
     }
-    return "NIF";
+    return "OTRO";
 }
 
 /**
@@ -112,7 +114,7 @@ export function generateReservaHospedajeXML(
         const tipoDoc = mapTipoDocumentoSES(v.tipo_documento, v.numero_documento);
         const numDoc = (v.numero_documento || "").trim().toUpperCase();
         const sexo = mapSexoSES(v.sexo);
-        const nac = (v.nacionalidad || "ESP").trim().toUpperCase().slice(0, 3);
+        const nac = normalizeCountryToISO3(v.nacionalidad);
         const fechaNac = v.fecha_nacimiento
             ? format(parseISO(v.fecha_nacimiento), "yyyy-MM-dd")
             : "1990-01-01";

@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import { normalizeCountryToISO3, COMMON_NATIONALITIES } from "@/lib/countryCodes";
+import { validateDocument, getExpectedNieLetter, getExpectedDniLetter } from "@/lib/documentValidation";
 
 interface GuestForm {
     nombre: string;
@@ -150,6 +152,13 @@ export default function CheckinPage() {
             if (!g.primer_apellido.trim()) return toast.error(`Huésped #${num}: El primer apellido es obligatorio.`);
             if (!g.numero_documento.trim()) return toast.error(`Huésped #${num}: El número de documento es obligatorio.`);
             if (!g.fecha_nacimiento) return toast.error(`Huésped #${num}: La fecha de nacimiento es obligatoria.`);
+
+            if (g.tipo_documento === "NIE" || g.tipo_documento === "DNI") {
+                const check = validateDocument(g.tipo_documento, g.numero_documento);
+                if (!check.valid) {
+                    return toast.error(`Huésped #${num} (${g.nombre}): ${check.message}`);
+                }
+            }
         }
 
         if (!signature) {
@@ -176,7 +185,7 @@ export default function CheckinPage() {
                 numero_documento: g.numero_documento.trim().toUpperCase(),
                 numero_soporte: g.numero_soporte.trim() || null,
                 fecha_expedicion_doc: g.fecha_expedicion_doc || null,
-                nacionalidad: g.nacionalidad.trim() || "ESP",
+                nacionalidad: normalizeCountryToISO3(g.nacionalidad),
                 fecha_nacimiento: g.fecha_nacimiento || null,
                 lugar_residencia: g.lugar_residencia.trim() || null,
                 telefono: g.telefono.trim() || null,
@@ -392,12 +401,56 @@ export default function CheckinPage() {
                                         <div className="space-y-1">
                                             <Label className="text-slate-300 font-semibold">Nº Documento *</Label>
                                             <Input
-                                                placeholder="12345678Z"
+                                                placeholder={g.tipo_documento === "NIE" ? "X1234567A" : "12345678Z"}
                                                 value={g.numero_documento}
-                                                onChange={e => updateGuest(index, "numero_documento", e.target.value)}
+                                                onChange={e => updateGuest(index, "numero_documento", e.target.value.toUpperCase())}
                                                 className="bg-slate-950 border-slate-800 text-white font-mono uppercase focus:border-indigo-500"
                                                 required
                                             />
+                                            {g.tipo_documento === 'NIE' && g.numero_documento && (() => {
+                                                const exp = getExpectedNieLetter(g.numero_documento);
+                                                const curr = g.numero_documento.trim().toUpperCase().slice(-1);
+                                                if (exp && curr && exp !== curr) {
+                                                    return (
+                                                        <div className="text-[10px] text-amber-400 bg-amber-500/10 p-1.5 rounded border border-amber-500/20 flex items-center justify-between mt-1">
+                                                            <span>⚠️ Letra NIE calculada: <strong>{exp}</strong> (indicada: {curr})</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const clean = g.numero_documento.trim().toUpperCase();
+                                                                    updateGuest(index, "numero_documento", clean.slice(0, -1) + exp);
+                                                                }}
+                                                                className="underline font-bold text-indigo-400 hover:text-indigo-300 ml-1"
+                                                            >
+                                                                Cambiar a {exp}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                            {g.tipo_documento === 'DNI' && g.numero_documento && (() => {
+                                                const exp = getExpectedDniLetter(g.numero_documento);
+                                                const curr = g.numero_documento.trim().toUpperCase().slice(-1);
+                                                if (exp && curr && exp !== curr) {
+                                                    return (
+                                                        <div className="text-[10px] text-amber-400 bg-amber-500/10 p-1.5 rounded border border-amber-500/20 flex items-center justify-between mt-1">
+                                                            <span>⚠️ Letra DNI calculada: <strong>{exp}</strong> (indicada: {curr})</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const clean = g.numero_documento.trim().toUpperCase();
+                                                                    updateGuest(index, "numero_documento", clean.slice(0, -1) + exp);
+                                                                }}
+                                                                className="underline font-bold text-indigo-400 hover:text-indigo-300 ml-1"
+                                                            >
+                                                                Cambiar a {exp}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                         </div>
                                         <div className="space-y-1">
                                             <Label className="text-slate-300 font-semibold">Sexo *</Label>
@@ -421,12 +474,18 @@ export default function CheckinPage() {
                                         <div className="space-y-1">
                                             <Label className="text-slate-300 font-semibold">Nacionalidad *</Label>
                                             <Input
-                                                placeholder="ESP / España"
+                                                placeholder="Ej: España (ESP), Rumanía (ROU)..."
                                                 value={g.nacionalidad}
+                                                list="nacionalidades-list"
                                                 onChange={e => updateGuest(index, "nacionalidad", e.target.value)}
                                                 className="bg-slate-950 border-slate-800 text-white uppercase focus:border-indigo-500"
                                                 required
                                             />
+                                            <datalist id="nacionalidades-list">
+                                                {COMMON_NATIONALITIES.map(n => (
+                                                    <option key={n.code} value={n.code}>{n.label}</option>
+                                                ))}
+                                            </datalist>
                                         </div>
                                         <div className="space-y-1">
                                             <Label className="text-slate-300 font-semibold">Fecha Nacimiento *</Label>
